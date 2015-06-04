@@ -8,14 +8,13 @@ import (
 	"strconv"
 
 	"github.com/juju/errors"
-	"github.com/wandoulabs/codis/pkg/models"
 
 	docopt "github.com/docopt/docopt-go"
 	log "github.com/ngaut/logging"
 )
 
 func cmdAction(argv []string) (err error) {
-	usage := `usage: codis-config action (gc [-n <num> | -s <seconds>] | remove-lock)
+	usage := `usage: codis-config action (gc [-n <num> | -s <seconds>] | remove-lock | remove-fence)
 
 options:
 	gc:
@@ -34,13 +33,9 @@ options:
 		return errors.Trace(runRemoveLock())
 	}
 
-	zkLock.Lock(fmt.Sprintf("action, %+v", argv))
-	defer func() {
-		err := zkLock.Unlock()
-		if err != nil {
-			log.Info(err)
-		}
-	}()
+	if args["remove-fence"].(bool) {
+		return errors.Trace(runRemoveFence())
+	}
 
 	if args["gc"].(bool) {
 		if args["-n"].(bool) {
@@ -63,18 +58,39 @@ options:
 	return nil
 }
 
+func runRemoveFence() error {
+	var v interface{}
+	if err := callApi(METHOD_GET, "/api/remove_fence", nil, &v); err != nil {
+		return err
+	}
+	fmt.Println(jsonify(v))
+	return nil
+}
+
 func runGCKeepN(keep int) error {
-	log.Info("gc...")
-	return models.ActionGC(zkConn, productName, models.GC_TYPE_N, keep)
+	var v interface{}
+	if err := callApi(METHOD_GET, fmt.Sprintf("/api/action/gc?keep=%d", keep), nil, &v); err != nil {
+		return err
+	}
+	fmt.Println(jsonify(v))
+	return nil
 }
 
 func runGCKeepNSec(secs int) error {
-	log.Info("gc...")
-	return models.ActionGC(zkConn, productName, models.GC_TYPE_SEC, secs)
+	var v interface{}
+	if err := callApi(METHOD_GET, fmt.Sprintf("/api/action/gc?secs=%d", secs), nil, &v); err != nil {
+		return err
+	}
+	fmt.Println(jsonify(v))
+	return nil
 }
 
 func runRemoveLock() error {
-	log.Info("removing lock...")
-	zkLock.Unlock()
-	return errors.Trace(models.ForceRemoveLock(zkConn, productName))
+	var v interface{}
+	if err := callApi(METHOD_GET, "/api/force_remove_locks", nil, &v); err != nil {
+		return err
+	}
+	fmt.Println(jsonify(v))
+	return nil
+
 }

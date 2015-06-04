@@ -18,7 +18,7 @@ codis 支持水平扩容/缩容，扩容可以直使界面的 "Auto Rebalance" �
 2) 原来使用 Redis 的用户:
 看情况, 如果你使用以下命令:   
 
-KEYS, MOVE, OBJECT, RENAME, RENAMENX, SORT, SCAN, BITOP,MSETNX, BLPOP, BRPOP, BRPOPLPUSH, PSUBSCRIBE，PUBLISH, PUNSUBSCRIBE,  SUBSCRIBE,  UNSUBSCRIBE,  DISCARD, EXEC, MULTI,  UNWATCH,  WATCH, SCRIPT EXISTS, SCRIPT FLUSH, SCRIPT KILL, SCRIPT LOAD, AUTH, ECHO, SELECT, BGREWRITEAOF, BGSAVE, CLIENT KILL, CLIENT LIST, CONFIG GET, CONFIG SET, CONFIG RESETSTAT, DBSIZE, DEBUG OBJECT, DEBUG SEGFAULT, FLUSHALL, FLUSHDB, INFO, LASTSAVE, MONITOR, SAVE, SHUTDOWN, SLAVEOF, SLOWLOG, SYNC, TIME
+KEYS, MOVE, OBJECT, RENAME, RENAMENX, SORT, SCAN, BITOP,MSETNX, BLPOP, BRPOP, BRPOPLPUSH, PSUBSCRIBE，PUBLISH, PUNSUBSCRIBE,  SUBSCRIBE,  UNSUBSCRIBE,  DISCARD, EXEC, MULTI,  UNWATCH,  WATCH, SCRIPT EXISTS, SCRIPT FLUSH, SCRIPT KILL, SCRIPT LOAD, AUTH, ECHO, SELECT, BGREWRITEAOF, BGSAVE, CLIENT KILL, CLIENT LIST, CONFIG GET, CONFIG SET, CONFIG RESETSTAT, DBSIZE, DEBUG OBJECT, DEBUG SEGFAULT, FLUSHALL, FLUSHDB, LASTSAVE, MONITOR, SAVE, SHUTDOWN, SLAVEOF, SLOWLOG, SYNC, TIME
 
 是无法直接迁移到 Codis 上的. 你需要修改你的代码, 用其他的方式实现.
 
@@ -51,6 +51,10 @@ Codis 是会把 KEYS 指令屏蔽的, 即使你在使用 raw Redis, 我也不太
 
 CAS 暂时不支持, 目前只支持eval的方式来跑lua脚本，需要配合TAG使用. 
 
+###有没有 zookeeper 的教程？
+
+[请参考这里](http://www.juvenxu.com/2015/03/20/experiences-on-zookeeper-ops/)
+
 ###Codis的性能如何?
 
 8 core Xeon 2.10GHz, 多线程的 benchmark, 单 proxy 的 ops 是 12w. 而且 proxy 是可以动态水平扩展的, 理论上的性能瓶颈应该是百万级别的.
@@ -73,9 +77,13 @@ CAS 暂时不支持, 目前只支持eval的方式来跑lua脚本，需要配合T
 
 见 [Codis 数据迁移流程](http://0xffff.me/blog/2014/11/11/codis-de-she-ji-yu-shi-xian-part-2/)
 
+###Codis支持etcd吗 ? 
+
+支持，请参考使用教程
+
 ###现有redis集群上有上T的数据，如何迁移到Codis上来？
 
-为了提高 Codis 推广和部署上的效率，我们为数据迁移提供了一个叫做 [redis-port](https://github.com/wandoulabs/codis/tree/master/extern/redis-port) 的命令行工具，它能够：
+为了提高 Codis 推广和部署上的效率，我们为数据迁移提供了一个叫做 [redis-port](https://github.com/wandoulabs/redis-port) 的命令行工具，它能够：
 
 + 静态分析 RDB 文件，包括解析以及恢复 RDB 数据到 redis
 + 从 redis 上 dump RDB 文件以及从 redis 和 codis 之间动态同步数据
@@ -112,3 +120,12 @@ CAS 暂时不支持, 目前只支持eval的方式来跑lua脚本，需要配合T
 + redis-port 处理还是很快的，参考：
 	- https://github.com/sripathikrishnan/redis-rdb-tools
 	- https://github.com/cupcake/rdb
+
+#### Dashboard 中 Ops 一直是 0？
+
+检查你的启动 dashboard 进程的机器，看是否可以访问proxy的地址，对应的地址是 proxy 启动参数中的 debug_var_addr 中填写的地址。
+
+#### 如果出现错误 "Some proxies may not stop cleanly ..." 如何处理？
+
+可能的原因是之前某个 proxy 并没有正常退出所致，我们并不能区分该 proxy 是 session expire 或者已经退出，为了安全起见，我们在这期间是禁止做集群拓扑结构变更的操作的。请确认这个 proxy 已经确实下线，或者确实进程已经被杀掉后，然后清除这个 proxy 留下的fence，使用命令：
+`codis-config -c config.ini action remove-fence` 进行操作。

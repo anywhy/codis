@@ -23,8 +23,8 @@ Codis support namespace, configs of products with different name  won’t be con
 Install Go please check [this document](https://github.com/astaxie/build-web-application-with-golang/blob/master/ebook/01.1.md). Then follow these hints:
 
 ```
-go get github.com/wandoulabs/codis
-cd path/to/codis
+go get -d github.com/wandoulabs/codis
+cd $GOPATH/src/github.com/wandoulabs/codis
 ./bootstrap.sh
 make gotest
 ```
@@ -74,12 +74,16 @@ options:
 
 ```
 zk=localhost:2181   <- Location of `zookeeper`, use `zk=hostname1:2181,hostname2:2181,hostname3:2181,hostname4:2181,hostname5:2181` for `zookeeper` clusters.
+`zk=http://hostname1:2181,http://hostname2:2181,http://hostname3:2181 for `etcd` clusters.
 product=test        <- Product name, also the name of this Coids clusters, can be considered as namespace, Codis with different names have no intersection. 
 proxy_id=proxy_1    <- Proxy will take this as identifier for proxy, multiple proxy can use different `config.ini` with various `proxy_id`.
+dashboard_addr=localhost:18087  <- dashboard provides the RESTful API for CLI
+coordinator=zookeeper  <-replace zookeeper to etcd if you are using etcd.
 ```
 
 ### Workflow
-1. Execute `cconfig slot init` to initialize slots
+0. Execute `codis-config dashboard` , start dashboard.
+1. Execute `codis-config slot init` to initialize slots
 2. Starting and compiling a Codis Redis has no difference from a normal Redis Server
 3. Add Redis server group, each server group as a Redis server group, only one master is allowed while could have multiple slaves. Group id only support integer lager than 1.
 
@@ -112,7 +116,7 @@ Then the group with id of 2:
 
 ```
 $ ./codis-config server add 2 localhost:6479 master
-$ ./codis-config server add 2 localhost:6479 slave
+$ ./codis-config server add 2 localhost:6480 slave
 ```
 
 4. Config slot range of server group
@@ -148,12 +152,7 @@ $ ./codis-config slot range-set 512 1023 2 online
  ../bin/codis-config -c config.ini proxy online <proxy_name>  <---- proxy id, e.g. proxy_1
 ```
 
-6. Start dashboard server(Optional but recommended)
-
-```
-../bin/codis-config -c config.ini -L ./log/dashboard.log dashboard --addr=:18087 --http-log=./log/requests.log
-```
-7. Open http://localhost:18087/admin in browser
+6. Open http://localhost:18087/admin in browser
 
 Now you can achieve operations in browser. Enjoy!
 
@@ -173,7 +172,7 @@ Migration progress is reliable and transparent, data won’t vanish and top laye
 
 Notice that migration task could be paused, but if there is a paused task, it must be fulfilled before another start(means only one migration task is allowed at the same time). 
 
-## Auto Rebalance
+### Auto Rebalance
 
 Codis support dynamic slots migration based on RAM usage to balance data distribution.
  
@@ -185,3 +184,16 @@ Requirements:
  * all codis-server must set maxmemory.
  * All slots’ status should be `online`, namely no transportation task is running. 
  * All server groups must have a master. 
+
+
+##HA
+
+Codis's proxy is stateless so you can run more than one proxies to get high availability and horizontal scalability.
+
+For Java users, you can use a modified jedis, [Jodis](https://github.com/wandoulabs/codis/tree/master/extern/jodis). It will watch the ZooKeeper to get the real-time available proxies, then query via them using a round robin policy to balance load and detect proxy online and offline automatically.
+
+For redis instances, the designers of codis think when a master down, system administrator should know about it and promote a slave to master by hand, not automatically. Because a crashed master may result in the data in this group not consistent.
+But we also offer a solution: [codis-ha](https://github.com/ngaut/codis-ha)。It is a tool using codis rest api to promote a slave to master when it find the master down.
+
+When codis promote one slave instantce to master, other slaves will not change there status. These slaves will still try to sync from the old crashed master, so the data in this group is not consistent.
+Because the `slave of` command in redis will let a slave drop its data and sync from the new master, it will make the master a little slow on handling queries.So you should change the status by hand after your acknowledgement by using `codis-config server add <group_id> <redis_addr> slave` to refresh the status of remain slaves. Codis-ha won't do this.

@@ -31,9 +31,11 @@ type ProxyInfo struct {
 	State        string `json:"state"`
 	Description  string `json:"description"`
 	DebugVarAddr string `json:"debug_var_addr"`
+	Pid          int    `json:"pid"`
+	StartAt      string `json:"start_at"`
 }
 
-func (p ProxyInfo) Ops() (int64, error) {
+func (p *ProxyInfo) Ops() (int64, error) {
 	resp, err := http.Get("http://" + p.DebugVarAddr + "/debug/vars")
 	if err != nil {
 		return -1, errors.Trace(err)
@@ -60,7 +62,7 @@ func (p ProxyInfo) Ops() (int64, error) {
 	return 0, nil
 }
 
-func (p ProxyInfo) DebugVars() (map[string]interface{}, error) {
+func (p *ProxyInfo) DebugVars() (map[string]interface{}, error) {
 	resp, err := http.Get("http://" + p.DebugVarAddr + "/debug/vars")
 	if err != nil {
 		return nil, errors.Trace(err)
@@ -89,11 +91,18 @@ func CreateProxyInfo(zkConn zkhelper.Conn, productName string, pi *ProxyInfo) (s
 	if err != nil {
 		return "", errors.Trace(err)
 	}
+	dir := GetProxyPath(productName)
+	zkhelper.CreateRecursive(zkConn, dir, "", 0, zkhelper.DefaultDirACLs())
+	return zkConn.Create(path.Join(dir, pi.Id), data, zk.FlagEphemeral, zkhelper.DefaultFileACLs())
+}
 
-	zkhelper.CreateRecursive(zkConn, GetProxyPath(productName), string(data),
-		0, zkhelper.DefaultDirACLs())
-	return zkConn.Create(path.Join(GetProxyPath(productName), pi.Id), data,
-		zk.FlagEphemeral, zkhelper.DefaultDirACLs())
+func GetProxyFencePath(productName string) string {
+	return fmt.Sprintf("/zk/codis/db_%s/fence", productName)
+}
+
+func CreateProxyFenceNode(zkConn zkhelper.Conn, productName string, pi *ProxyInfo) (string, error) {
+	return zkhelper.CreateRecursive(zkConn, path.Join(GetProxyFencePath(productName), pi.Addr), "",
+		0, zkhelper.DefaultFileACLs())
 }
 
 func ProxyList(zkConn zkhelper.Conn, productName string, filter func(*ProxyInfo) bool) ([]ProxyInfo, error) {
@@ -115,6 +124,22 @@ func ProxyList(zkConn zkhelper.Conn, productName string, filter func(*ProxyInfo)
 	}
 
 	return ret, nil
+}
+
+func GetFenceProxyMap(zkConn zkhelper.Conn, productName string) (map[string]bool, error) {
+	children, _, err := zkConn.Children(GetProxyFencePath(productName))
+	if err != nil {
+		if err.Error() == zk.ErrNoNode.Error() {
+			return make(map[string]bool), nil
+		} else {
+			return nil, err
+		}
+	}
+	m := make(map[string]bool, len(children))
+	for _, fenceNode := range children {
+		m[fenceNode] = true
+	}
+	return m, nil
 }
 
 var ErrUnknownProxyStatus = errors.New("unknown status, should be (online offline)")

@@ -18,11 +18,12 @@ build-server:
 clean:
 	@rm -rf bin
 	@rm -f *.rdb *.out *.log *.dump deploy.tar
-	@rm -f Dockerfile extern/Dockerfile
+	@rm -f extern/Dockerfile
+	@rm -f sample/log/*.log sample/nohup.out
 	@if [ -d test ]; then cd test && rm -f *.out *.log *.rdb; fi
 
 distclean: clean
 	@make --no-print-directory --quiet -C extern/redis-2.8.13 clean
 
 gotest:
-	go test ./... -race
+	go test ./pkg/... ./cmd/... -race

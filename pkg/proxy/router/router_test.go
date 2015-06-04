@@ -36,8 +36,9 @@ func InitEnv() {
 			proxyId:     "proxy_test",
 			productName: "test",
 			zkAddr:      "localhost:2181",
-			net_timeout: 5,
+			netTimeout:  5,
 			f:           func(string) (zkhelper.Conn, error) { return conn, nil },
+			proto:       "tcp4",
 		}
 
 		//init action path
@@ -59,8 +60,8 @@ func InitEnv() {
 		g2 := models.NewServerGroup(conf.productName, 2)
 		g2.Create(conn)
 
-		redis1, _ := miniredis.Run()
-		redis2, _ := miniredis.Run()
+		redis1, _ = miniredis.Run()
+		redis2, _ = miniredis.Run()
 
 		s1 := models.NewServer(models.SERVER_TYPE_MASTER, redis1.Addr())
 		s2 := models.NewServer(models.SERVER_TYPE_MASTER, redis2.Addr())
@@ -80,7 +81,7 @@ func InitEnv() {
 		}
 
 		go func() { //set proxy online
-			time.Sleep(5 * time.Second)
+			time.Sleep(3 * time.Second)
 			err := models.SetProxyStatus(conn, conf.productName, conf.proxyId, models.PROXY_STATE_ONLINE)
 			if err != nil {
 				log.Fatal(errors.ErrorStack(err))
@@ -234,7 +235,7 @@ func TestInvalidRedisCmdPing(t *testing.T) {
 	}
 	defer c.Close()
 
-	_, err = c.Do("info")
+	_, err = c.Do("SAVE")
 	if err != io.EOF {
 		t.Fatal(err)
 	}
@@ -295,5 +296,58 @@ func TestMarkOffline(t *testing.T) {
 
 	if atomic.LoadInt64(&suicide) == 0 {
 		t.Error("shoud be suicided")
+	}
+}
+
+func TestRedisRestart(t *testing.T) {
+	InitEnv()
+
+	c, err := redis.Dial("tcp", "localhost:19000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
+	_, err = c.Do("SET", "key1", "value1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = c.Do("SET", "key2", "value2")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//close redis
+	redis1.Close()
+	redis2.Close()
+	_, err = c.Do("SET", "key1", "value1")
+	if err == nil {
+		t.Fatal("should be error")
+	}
+	_, err = c.Do("SET", "key2", "value2")
+	if err == nil {
+		t.Fatal("should be error")
+	}
+
+	//restart redis
+	redis1.Restart()
+	redis2.Restart()
+	time.Sleep(3 * time.Second)
+	//proxy should closed our connection
+	_, err = c.Do("SET", "key1", "value1")
+	if err == nil {
+		t.Error("should be error")
+	}
+
+	//now, proxy should recovered from connection error
+	c, err = redis.Dial("tcp", "localhost:19000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
+	_, err = c.Do("SET", "key1", "value1")
+	if err != nil {
+		t.Fatal(err)
 	}
 }
