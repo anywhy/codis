@@ -607,9 +607,6 @@ func apiRedisRemoveData(r *http.Request) (int, string) {
 
 	r.ParseForm()
 	valKey := r.FormValue("keyName")
-
-	log.Info("del key:" + valKey)
-
 	// get all server masters, only del master data it can sync slave
 	masters, err := models.ServerMasters(conn, globalEnv.ProductName())
 	if (masters == nil || err != nil) {
@@ -629,7 +626,6 @@ func apiRedisRemoveData(r *http.Request) (int, string) {
 func apiRedisTrash(r *http.Request) (int, string) {
 	r.ParseForm()
 	network := r.FormValue("network")
-	log.Info("trash master addr: " + network)
 	_,err := flushDB(network)
 	if (err != nil) {
 		log.Warning(err)
