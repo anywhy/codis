@@ -4,6 +4,7 @@ import (
 	"github.com/garyburd/redigo/redis"
 	"github.com/juju/errors"
 	log "github.com/ngaut/logging"
+	"strings"
 )
 
 // del data
@@ -29,11 +30,27 @@ func delData(network string, valKey string) (int, error)  {
 	if (err != nil) {
 		log.Warning(err)
 	}
-	// del data
-	_, err = conn.Do("DEL", valKey)
-	if err != nil {
-		return -1, errors.Trace(err)
+
+	if !strings.HasSuffix(network, "*") {
+		// del data
+		_, err := conn.Do("DEL", valKey)
+		if err != nil {
+			return -1, errors.Trace(err)
+		}
+	} else {
+		keys, err := conn.Do("KEYS", valKey)
+		if (err != nil) {
+			return -1, errors.Trace(err)
+		}
+		// remove all
+		for _, key := range keys {
+			_, err := conn.Do("DEL", key)
+			if (err != nil) {
+				return -1, errors.Trace(err)
+			}
+		}
 	}
+
 	return 0, nil
 }
 
