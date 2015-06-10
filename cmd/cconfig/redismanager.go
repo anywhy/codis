@@ -38,7 +38,7 @@ func delData(network string, valKey string) (int, error)  {
 			return -1, errors.Trace(err)
 		}
 	} else {
-		keys, err := redis.Values(conn.Do("KEYS", valKey))
+		keys, err := redis.Strings(conn.Do("KEYS", valKey))
 		if (err != nil) {
 			return -1, errors.Trace(err)
 		}
