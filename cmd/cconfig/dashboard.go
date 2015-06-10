@@ -256,7 +256,7 @@ func runDashboard(addr string, httpLogFile string) {
 	// add redis api
 	m.Post("/api/redis/trash", apiRedisTrash)
 	m.Post("/api/redis/delete", apiRedisRemoveData)
-	//m.Get("/api/redis/:key","")
+	m.Post("/api/redis/stop",apiRedisStop)
 
 	m.Get("/slots", pageSlots)
 	m.Get("/", func(r render.Render) {

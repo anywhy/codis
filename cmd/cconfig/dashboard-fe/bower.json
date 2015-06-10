@@ -7,6 +7,7 @@
     "bootstrap" : "latest",
     "angular-resource" : "latest",
     "highcharts-ng" : "latest",
-    "highcharts" : "latest"
+    "highcharts" : "latest",
+    "font-awesome" : "latest"
   }
 }

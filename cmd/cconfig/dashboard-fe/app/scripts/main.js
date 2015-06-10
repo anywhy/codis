@@ -59,6 +59,7 @@ codisControllers.factory('ServerGroupFactory', ['$resource', function ($resource
         deleteServer :{ method : 'PUT', url: 'http://localhost:18087/api/server_group/:id/removeServer', params :{ id : '@group_id' } },
         promote :{ method : 'POST', url: 'http://localhost:18087/api/server_group/:id/promote', params :{ id : '@group_id' } },
         trashRedis: { method: 'POST', url : 'http://localhost:18087/api/redis/trash', params:{network: '@addr'}},
+        stopRedis: { method: 'POST', url : 'http://localhost:18087/api/redis/stop', params:{network: '@addr'}}
         // no update here, just delete and create, :)
     });
 }]);
@@ -105,7 +106,8 @@ function($scope, $http, $modal, RedisMasterFactory) {
                     alert("remvoe data success")
                     window.location.reload()
                 }, function(failedData) {
-                    alert(failedData.data)
+                    console.log(failedData.data);
+                    alert("remvoe data error");
                 })
             }
         });
@@ -420,16 +422,34 @@ function($scope, $http, $modal, $log, ServerGroupsFactory, ServerGroupFactory) {
 
     // add by yangdx
     $scope.trashRedis = function(server) {
-        var sure = confirm("are you sure trash data ?");
+        var sure = confirm("are you sure trash master data ?");
         if (!sure) {
             return
         }
 
         ServerGroupFactory.trashRedis(server, function() {
-            alert("trash master success");
+            alert("trash master data success");
             window.location.reload()
         }, function(failedData) {
-            alert(failedData.data);
+            //alert(failedData.data);
+            console.log(failedData.data);
+            alert("trash master data error")
+        });
+    }
+
+    $scope.stopRedis = function(server) {
+        var sure = confirm("are you sure stop this node ?");
+        if (!sure) {
+            return
+        }
+
+        ServerGroupFactory.stopRedis(server, function() {
+            alert("stop node success");
+            window.location.reload()
+        }, function(failedData) {
+            //alert(failedData.data);
+            console.log(failedData.data);
+            alert("stop node  error")
         });
     }
 

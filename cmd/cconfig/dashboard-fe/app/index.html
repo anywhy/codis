@@ -2,7 +2,7 @@
 <html class="no-js" ng-app="codisControllers">
   <head>
     <meta charset="utf-8">
-    <title>Bonc-Codis</title>
+    <title>Codis</title>
     <style type="text/css">
       .panel-heading {
           overflow: hidden;
@@ -33,6 +33,7 @@
     <!-- build:css(.) styles/vendor.css -->
     <!-- bower:css -->
     <link rel="stylesheet" href="bower_components/bootstrap/dist/css/bootstrap.css" />
+    <link rel="stylesheet" href="bower_components/font-awesome/css/font-awesome.css" />
     <!-- endbower -->
     <!-- endbuild -->
     <!-- build:css(.tmp) styles/main.css -->
@@ -166,12 +167,12 @@
 
     <script type="text/ng-template" id="removeRedisMasterDataModal">
         <div class="modal-header">
-            <h4 class="modal-title">Remove Master Data</h4>
+            <h4 class="modal-title">Delete Master Data</h4>
         </div>
         <div class="modal-body">
             <form novalidate="novalidate" class="form-horizontal">
                 <div class="control-group">
-                    <label class="control-label">Data Key:(KEY or KEY_*)</label>
+                    <label class="control-label">Key Of Data:(KEY or KEY_*)</label>
                     <div class="controls">
                         <input class="form-control" type="input" ng-model="master.keyName"/>
                     </div>
@@ -189,7 +190,7 @@
     <div class="navbar navbar-default navbar-static-top" role="navigation">
       <div class="container">
         <div class="navbar-header">
-          <a class="navbar-brand" href="#">Bonc-Codis</a>
+          <a class="navbar-brand" href="#">BONC-Codis</a>
         </div>
         <div class="navbar-collapse collapse">
           <ul class="nav navbar-nav navbar-right">
@@ -226,18 +227,19 @@
         </div>
       </div>
 
-      <div ng-controller="redisMasterCtl" ng-cloak>
-          <div class="row">
-              <div class="col-md-4">
-                  <h4>Redis Master Manager</h4>
-              </div>
-              <div class="col-md-8" style="padding-left: 10px;">
-                  <p>
-                    <button class="btn btn-sm btn-primary" ng-click="removeMasterData()"><i class="glyphicon glyphicon-scissors"></i>&nbsp;Remove Data</button>
-                  </p>
-              </div>
-          </div>
-      </div>
+        <div ng-controller="redisMasterCtl" ng-cloak>
+            <div class="row">
+                <div class="col-md-12">
+                    <h4>Redis Master Manage</h4>
+
+                    <p>
+                        <button class="btn btn-sm btn-success" ng-click="removeMasterData()">
+                            <i class="fa fa-times fa-lg"></i>&nbsp;&nbsp;Delete Data
+                        </button>
+                    </p>
+                </div>
+            </div>
+        </div>
 
       <div ng-controller="codisServerGroupMainCtl" ng-cloak>
         <div class="row">
@@ -279,8 +281,9 @@
                           <td>
                             <div class="btn-group btn-group-sm pull-right">
                               <a class="btn btn-primary btn-sm" ng-if="server.type != 'master'" href="" ng-click="promoteServer(server)"> <span class="glyphicon glyphicon-arrow-up"></span> Promote to Master</a>
-                              <a class="btn btn-danger btn-sm" href="" ng-click="removeServer(server)"><span class="glyphicon glyphicon-remove"></span></a>
-                              <a class="btn btn-danger btn-sm" ng-if="server.type == 'master'" href="" ng-click="trashRedis(server)"><i class="glyphicon glyphicon-trash"></i></a>
+                              <a class="btn btn-warning btn-sm" href="" ng-click="removeServer(server)"><span class="glyphicon glyphicon-remove"></span></a>
+                              <a class="btn btn-danger btn-sm" ng-if="server.type == 'master'" href="" ng-click="trashRedis(server)"><i class="fa fa-trash-o fa-lg"></i></a>
+                              <a class="btn btn-danger btn-sm" href="" ng-click="stopRedis(server)"><i class="fa fa-power-off fa-lg"></i></a>
                             </div>
                           </td>
                         </tr>

@@ -635,3 +635,16 @@ func apiRedisTrash(r *http.Request) (int, string) {
 	return jsonRetSucc()
 }
 
+// stop redis node
+func apiRedisStop(r *http.Request) (int, string) {
+	r.ParseForm()
+	network := r.FormValue("network")
+	_,err := stopRedis(network)
+	if (err != nil) {
+		log.Warning(err)
+		return 500, err.Error()
+	}
+
+	return jsonRetSucc()
+}
+

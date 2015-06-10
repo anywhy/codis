@@ -82,3 +82,15 @@ func setData(network string, key string, val string) (int, error) {
 	}
 	return 0, nil
 }
+
+// set data
+func stopRedis(network string) (int, error) {
+	conn, err := redis.Dial("tcp", network)
+	defer conn.Close()
+	if (err != nil) {
+		log.Warning(err)
+	}
+	_, _ = conn.Do("SHUTDOWN")
+
+	return 0, nil
+}
