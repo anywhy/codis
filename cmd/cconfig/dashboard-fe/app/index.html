@@ -2,7 +2,7 @@
 <html class="no-js" ng-app="codisControllers">
   <head>
     <meta charset="utf-8">
-    <title>Codis</title>
+    <title>Bonc-Codis</title>
     <style type="text/css">
       .panel-heading {
           overflow: hidden;
@@ -164,12 +164,32 @@
         </div>
     </script>
 
+    <script type="text/ng-template" id="removeRedisMasterDataModal">
+        <div class="modal-header">
+            <h4 class="modal-title">Remove Master Data</h4>
+        </div>
+        <div class="modal-body">
+            <form novalidate="novalidate" class="form-horizontal">
+                <div class="control-group">
+                    <label class="control-label">Data Key:(KEY or KEY_*)</label>
+                    <div class="controls">
+                        <input class="form-control" type="input" ng-model="master.keyName"/>
+                    </div>
+                </div>
+            </form>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-default" ng-click="ok(master)">OK</button>
+            <button class="btn btn-warning" ng-click="cancel()">Cancel</button>
+        </div>
+    </script>
+
     <!-- contents -->
 
     <div class="navbar navbar-default navbar-static-top" role="navigation">
       <div class="container">
         <div class="navbar-header">
-          <a class="navbar-brand" href="#">Codis</a>
+          <a class="navbar-brand" href="#">Bonc-Codis</a>
         </div>
         <div class="navbar-collapse collapse">
           <ul class="nav navbar-nav navbar-right">
@@ -204,6 +224,19 @@
           </div>
           <div class="col-md-8"><highchart config="chartOps"></highchart></div>
         </div>
+      </div>
+
+      <div ng-controller="redisMasterCtl" ng-cloak>
+          <div class="row">
+              <div class="col-md-4">
+                  <h4>Redis Master Manager</h4>
+              </div>
+              <div class="col-md-8" style="padding-left: 10px;">
+                  <p>
+                    <button class="btn btn-sm btn-primary" ng-click="removeMasterData()"><i class="glyphicon glyphicon-scissors"></i>&nbsp;Remove Data</button>
+                  </p>
+              </div>
+          </div>
       </div>
 
       <div ng-controller="codisServerGroupMainCtl" ng-cloak>
@@ -245,8 +278,9 @@
                           <td> [[ serverInfo.db0 ]] </td>
                           <td>
                             <div class="btn-group btn-group-sm pull-right">
-                              <a class="btn btn-primary btn-sm" ng-if="server.type != 'master'" href="" ng-click="promoteServer(server)"> <span class="glyphicon glyphicon-arrow-up"></span> Promote to Master</a> 
+                              <a class="btn btn-primary btn-sm" ng-if="server.type != 'master'" href="" ng-click="promoteServer(server)"> <span class="glyphicon glyphicon-arrow-up"></span> Promote to Master</a>
                               <a class="btn btn-danger btn-sm" href="" ng-click="removeServer(server)"><span class="glyphicon glyphicon-remove"></span></a>
+                              <a class="btn btn-danger btn-sm" ng-if="server.type == 'master'" href="" ng-click="trashRedis(server)"><i class="glyphicon glyphicon-trash"></i></a>
                             </div>
                           </td>
                         </tr>
@@ -275,7 +309,7 @@
       <div ng-controller="codisMigrateCtl" ng-cloak>
         <div class="row">
           <div class="col-md-12">
-            <h4> Migrate Status <button ng-click="refresh()" class="btn btn-default btn-sm"><span class="glyphicon glyphicon-refresh"></span></button> 
+            <h4> Migrate Status <button ng-click="refresh()" class="btn btn-default btn-sm"><span class="glyphicon glyphicon-refresh"></span></button>
             </h4>
             <p>
               <div class="btn-group btn-group-sm">
@@ -307,11 +341,11 @@
                   <td> [[ task.status]]</td>
                   <td> [[ task.percent ]] % </td>
                   <td>
-                      <button ng-if="task.status == 'pending'" class="btn btn-sm btn-default" ng-click="removePendingTask(task)"> Remove </button> 
-                      <button ng-if="task.status == 'migrating'" class="btn btn-default btn-sm btn-danger" ng-click="stopRunningTask(task)"> Stop </button> 
+                      <button ng-if="task.status == 'pending'" class="btn btn-sm btn-default" ng-click="removePendingTask(task)"> Remove </button>
+                      <button ng-if="task.status == 'migrating'" class="btn btn-default btn-sm btn-danger" ng-click="stopRunningTask(task)"> Stop </button>
                   </td>
                 </tr>
-              </tbody>  
+              </tbody>
             </table>
             <table ng-if="migrate_status.migrate_slots.length > 0" class="table table-bordered">
               <h5 ng-if="migrate_status.migrate_slots.length > 0" class="text-muted"> Migrating Slot Info </h5>

@@ -57,10 +57,62 @@ codisControllers.factory('ServerGroupFactory', ['$resource', function ($resource
         delete: { method: 'DELETE', params: {id: '@id'} },
         addServer: { method: 'PUT', url: 'http://localhost:18087/api/server_group/:id/addServer', params :{ id : '@group_id' } },
         deleteServer :{ method : 'PUT', url: 'http://localhost:18087/api/server_group/:id/removeServer', params :{ id : '@group_id' } },
-        promote :{ method : 'POST', url: 'http://localhost:18087/api/server_group/:id/promote', params :{ id : '@group_id' } }
+        promote :{ method : 'POST', url: 'http://localhost:18087/api/server_group/:id/promote', params :{ id : '@group_id' } },
+        trashRedis: { method: 'POST', url : 'http://localhost:18087/api/redis/trash', params:{network: '@addr'}},
         // no update here, just delete and create, :)
     });
 }]);
+
+//--------- add by yangdx
+codisControllers.factory('RedisMasterFactory', ['$resource', function ($resource) {
+    return $resource('http://localhost:18087/api/redis', {}, {
+        delData: { method: 'POST', url : 'http://localhost:18087/api/redis/delete', params:{keyName:'@keyName'} }
+    });
+}]);
+
+codisControllers.controller('redisMasterCtl', ['$scope', '$http', '$modal', 'RedisMasterFactory',
+function($scope, $http, $modal, RedisMasterFactory) {
+    // 删除数据
+    $scope.removeMasterData = function () {
+        var modalInstance = $modal.open({
+            templateUrl: 'removeRedisMasterDataModal',
+            controller: ['$scope', '$modalInstance', function ($scope, $modalInstance) {
+                $scope.ok = function (master) {
+                    if (master.keyName == null
+                        || master.keyName == ""
+                        || master.keyName == "undefind") {
+                        alert("please enter a key of data");
+                        return;
+                    }
+
+                    if (!confirm("are you sure delete data ?")) {
+                        return;
+                    }
+                    $modalInstance.close(master);
+                };
+
+                $scope.cancel = function () {
+                    $modalInstance.close(null);
+                }
+            }],
+            size: 'sm',
+        });
+
+        modalInstance.result.then(function (master) {
+            if (master) {
+                console.log(master);
+                RedisMasterFactory.delData(master, function() {
+                    alert("remvoe data success")
+                    window.location.reload()
+                }, function(failedData) {
+                    alert(failedData.data)
+                })
+            }
+        });
+    }
+}]);
+
+//-------------end------------------
 
 codisControllers.controller('codisProxyCtl', ['$scope', '$http', 'ProxyStatusFactory',
 function($scope, $http, ProxyStatusFactory) {
@@ -309,7 +361,7 @@ function($scope, $http, $modal, $log, ServerGroupsFactory, ServerGroupFactory) {
 
         ServerGroupFactory.delete({ id : groupId }, function() {
             $scope.server_groups = ServerGroupsFactory.query();
-        }, function() {
+        }, function(failedData) {
             alert(failedData.data);
         });
     }
@@ -363,6 +415,21 @@ function($scope, $http, $modal, $log, ServerGroupsFactory, ServerGroupFactory) {
                     alert(failedData.data);
                 })
             }
+        });
+    }
+
+    // add by yangdx
+    $scope.trashRedis = function(server) {
+        var sure = confirm("are you sure trash data ?");
+        if (!sure) {
+            return
+        }
+
+        ServerGroupFactory.trashRedis(server, function() {
+            alert("trash master success");
+            window.location.reload()
+        }, function(failedData) {
+            alert(failedData.data);
         });
     }
 

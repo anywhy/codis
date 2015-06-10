@@ -130,6 +130,25 @@ func ServerGroups(zkConn zkhelper.Conn, productName string) ([]*ServerGroup, err
 	return ret, nil
 }
 
+// add method get all Masters
+func ServerMasters(zkConn zkhelper.Conn, productName string)([]*Server, error) {
+	var ret []*Server
+	groups, err := ServerGroups(zkConn, productName)
+	if err != nil {
+		return nil,errors.Trace(err)
+	}
+
+	for _, group := range groups {
+		for _, srv := range group.Servers {
+			if srv.Type == SERVER_TYPE_MASTER {
+				ret = append(ret, srv)
+			}
+		}
+	}
+
+	return ret, nil
+}
+
 func (self *ServerGroup) Master(zkConn zkhelper.Conn) (*Server, error) {
 	servers, err := self.GetServers(zkConn)
 	if err != nil {

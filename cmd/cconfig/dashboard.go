@@ -253,6 +253,11 @@ func runDashboard(addr string, httpLogFile string) {
 	m.Get("/api/force_remove_locks", apiForceRemoveLocks)
 	m.Get("/api/remove_fence", apiRemoveFence)
 
+	// add redis api
+	m.Post("/api/redis/trash", apiRedisTrash)
+	m.Post("/api/redis/delete", apiRedisRemoveData)
+	//m.Get("/api/redis/:key","")
+
 	m.Get("/slots", pageSlots)
 	m.Get("/", func(r render.Render) {
 		r.Redirect("/admin")
