@@ -31,7 +31,7 @@ func delData(network string, valKey string) (int, error)  {
 		log.Warning(err)
 	}
 
-	if !strings.HasSuffix(network, "*") {
+	if !strings.HasSuffix(valKey, "*") {
 		// del data
 		_, err := conn.Do("DEL", valKey)
 		if err != nil {
