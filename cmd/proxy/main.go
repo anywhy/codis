@@ -4,19 +4,22 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"os/exec"
-	"path"
+	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/docopt/docopt-go"
-
+	"github.com/ngaut/gostats"
+	"github.com/wandoulabs/codis/pkg/proxy"
 	"github.com/wandoulabs/codis/pkg/proxy/router"
 	"github.com/wandoulabs/codis/pkg/utils"
 	"github.com/wandoulabs/codis/pkg/utils/bytesize"
@@ -55,21 +58,23 @@ func init() {
 }
 
 func setLogLevel(level string) {
-	var lv = log.LEVEL_INFO
-	switch strings.ToLower(level) {
+	level = strings.ToLower(level)
+	var l = log.LEVEL_INFO
+	switch level {
 	case "error":
-		lv = log.LEVEL_ERROR
+		l = log.LEVEL_ERROR
 	case "warn", "warning":
-		lv = log.LEVEL_WARN
+		l = log.LEVEL_WARN
 	case "debug":
-		lv = log.LEVEL_DEBUG
+		l = log.LEVEL_DEBUG
 	case "info":
 		fallthrough
 	default:
-		lv = log.LEVEL_INFO
+		level = "info"
+		l = log.LEVEL_INFO
 	}
-	log.SetLevel(lv)
-	log.Infof("set log level to %s", lv)
+	log.SetLevel(l)
+	log.Infof("set log level to <%s>", level)
 }
 
 func setCrashLog(file string) {
@@ -133,12 +138,13 @@ func main() {
 		}
 	}
 	log.SetLevel(log.LEVEL_INFO)
+	log.SetFlags(log.Flags() | log.Lshortfile)
 
 	// set log level
 	if s, ok := args["--log-level"].(string); ok && s != "" {
 		setLogLevel(s)
 	}
-
+	cpus = runtime.NumCPU()
 	// set cpu
 	if args["--cpu"] != nil {
 		cpus, err = strconv.Atoi(args["--cpu"].(string))
@@ -157,28 +163,50 @@ func main() {
 		httpAddr = args["--http-addr"].(string)
 	}
 
-	dumppath := utils.GetExecutorPath()
-
-	log.Info("dump file path:", dumppath)
-	setCrashLog(path.Join(dumppath, "codis-proxy.dump"))
-
 	checkUlimit(1024)
 	runtime.GOMAXPROCS(cpus)
 
 	http.HandleFunc("/setloglevel", handleSetLogLevel)
-	go http.ListenAndServe(httpAddr, nil)
-
+	go func() {
+		err := http.ListenAndServe(httpAddr, nil)
+		log.PanicError(err, "http debug server quit")
+	}()
 	log.Info("running on ", addr)
-	conf, err := router.LoadConf(configFile)
+	conf, err := proxy.LoadConf(configFile)
 	if err != nil {
 		log.PanicErrorf(err, "load config failed")
 	}
-	s, err := router.NewServer(addr, httpAddr, conf)
-	if err != nil {
-		log.PanicErrorf(err, "create new server failed")
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM, os.Kill)
+
+	s := proxy.New(addr, httpAddr, conf)
+	defer s.Close()
+
+	stats.PublishJSONFunc("router", func() string {
+		var m = make(map[string]interface{})
+		m["ops"] = router.OpCounts()
+		m["cmds"] = router.GetAllOpStats()
+		m["info"] = s.Info()
+		m["build"] = map[string]interface{}{
+			"version": utils.Version,
+			"compile": utils.Compile,
+		}
+		b, _ := json.Marshal(m)
+		return string(b)
+	})
+
+	go func() {
+		<-c
+		log.Info("ctrl-c or SIGTERM found, bye bye...")
+		s.Close()
+	}()
+
+	time.Sleep(time.Second)
+	if err := s.SetMyselfOnline(); err != nil {
+		log.WarnError(err, "mark myself online fail, you need mark online manually by dashboard")
 	}
-	if err := s.Serve(); err != nil {
-		log.PanicErrorf(err, "serve failed")
-	}
-	panic("exit")
+
+	s.Join()
+	log.Infof("proxy exit!! :(")
 }

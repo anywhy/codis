@@ -22,7 +22,7 @@ func TestBackend(t *testing.T) {
 	addr := l.Addr().String()
 	reqc := make(chan *Request, 16384)
 	go func() {
-		bc := NewBackendConn(addr)
+		bc := NewBackendConn(addr, "")
 		defer bc.Close()
 		defer close(reqc)
 		var resp = redis.NewBulkBytes(make([]byte, 4096))
@@ -31,7 +31,6 @@ func TestBackend(t *testing.T) {
 				Resp: resp,
 				Wait: &sync.WaitGroup{},
 			}
-			r.Wait.Add(1)
 			bc.PushBack(r)
 			reqc <- r
 		}

@@ -3,37 +3,26 @@
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/wandoulabs/codis?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 [![Build Status](https://travis-ci.org/wandoulabs/codis.svg)](https://travis-ci.org/wandoulabs/codis)
 
-Codis is a proxy based high performance Redis cluster solution written in Go/C, an alternative to Twemproxy.
+Codis is a proxy based high performance Redis cluster solution written in Go/C, an alternative to Twemproxy. It supports multiple stateless proxy with multiple redis instances and is engineered to elastically scale, Easily add or remove redis or proxy instances on-demand/dynamicly.
 
-Codis supports multiple stateless proxy with multiple redis instances.
-
-Codis is engineered to elastically scale, Easily add or remove redis or proxy instances on-demand/dynamicly.
-
-Codis is production-ready and is widely used by [wandoujia.com](http://wandoujia.com).
+Codis is production-ready and widely used at [wandoujia.com](http://wandoujia.com) and many companies. You can see [Codis Releases](https://github.com/wandoulabs/codis/releases) for latest and most stable realeases.
 
 ##Major Changes in 2.0
-In Codis 2.0, we redesign the request dispatcher. Now pipeline and mget/mset requests are much faster than ever!
+In Codis 2.0, we:
+* Redesign the request dispatcher, now pipeline and mget/mset requests are much faster than ever!
+* Codis-server (forked redis) is upgrated to 2.8.21. It brings bugfix from upstream redis and also has optimizations, for example, lower memory consumption and faster migration.
+* Optimize the zk connection, it is more stable now. 
+* Migration (and auto-rebalance) tasks are saved on zk, it will be continued automatically when the dashboard is restarted.
+* Support Redis AUTH command.
+* More configuration options, see config.ini
 
 ##Features
-* Auto rebalance
-* Extremely simple to use
-* Support both redis or rocksdb transparently
+* Proxy based
+* Add/remove redis or proxy dynamically without restarting client, safe and transparent data migration
+* Support both redis or redis-protocol databases
 * GUI dashboard & admin tools
-* Supports most of Redis commands, Fully compatible with twemproxy(https://github.com/twitter/twemproxy)
+* Supports most of Redis commands, Fully compatible with Twemproxy(https://github.com/twitter/twemproxy)
 * Native Redis clients are supported
-* Safe and transparent data migration, Easily add or remove nodes on-demand.
-* Command-line interface is also provided
-* RESTful APIs
-
-## Build and Install
-
-* Install go & ZooKeeper
-* go get -d github.com/wandoulabs/codis
-* cd $GOPATH/src/github.com/wandoulabs/codis
-* ./bootstrap.sh
-* make gotest
-* cd sample
-* follow instructions in usage.md
 
 ## Tutorial
 
@@ -44,6 +33,26 @@ In Codis 2.0, we redesign the request dispatcher. Now pipeline and mget/mset req
 
 [简体中文](https://github.com/wandoulabs/codis/blob/master/doc/FAQ_zh.md)
 [English (WIP) ](https://github.com/wandoulabs/codis/blob/master/doc/FAQ_en.md)
+
+## High Availability
+
+[简体中文](https://github.com/wandoulabs/codis/blob/master/doc/tutorial_zh.md#ha)
+[English](https://github.com/wandoulabs/codis/blob/master/doc/tutorial_en.md#ha)
+
+## Architecture
+
+![architecture](doc/pictures/architecture.png)
+
+## Snapshots
+
+Dashboard
+![main](doc/pictures/snapshot.png)
+
+Migrate
+![migrate](doc/pictures/snapshot_migrate.png)
+
+Slots
+![slots](doc/pictures/slots.png)
 
 ## Performance (Benchmark)
 #### Intel(R) Core(TM) i7-4770 CPU @ 3.40GHz x 1 + 16G RAM
@@ -168,31 +177,12 @@ done
 
 ![main](doc/bench2/bench.png)
 
-## High Availability
-
-[简体中文](https://github.com/wandoulabs/codis/blob/master/doc/tutorial_zh.md#ha)
-[English](https://github.com/wandoulabs/codis/blob/master/doc/tutorial_en.md#ha)
-
-## Architecture
-
-![architecture](doc/pictures/architecture.png)
-
-## Snapshots
-
-Dashboard
-![main](doc/pictures/snapshot.png)
-
-Migrate
-![migrate](doc/pictures/snapshot_migrate.png)
-
-Slots
-![slots](doc/pictures/slots.png)
-
 ## Authors
 
 * [@goroutine](https://github.com/ngaut)
 * [@c4pt0r](https://github.com/c4pt0r)
 * [@spinlock9](https://github.com/spinlock)
+* [@yangzhe1991](https://github.com/yangzhe1991)
 
 Thanks:
 
