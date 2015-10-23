@@ -8,9 +8,8 @@ import (
 	"fmt"
 	"path"
 
-	"github.com/ngaut/zkhelper"
-
 	"github.com/wandoulabs/codis/pkg/utils/errors"
+	"github.com/wandoulabs/zkhelper"
 )
 
 type SlotStatus string
@@ -101,7 +100,7 @@ func GetMigratingSlots(conn zkhelper.Conn, productName string) ([]*Slot, error) 
 	}
 
 	for _, slot := range slots {
-		if slot.State.Status == SLOT_STATUS_MIGRATE {
+		if slot.State.Status == SLOT_STATUS_MIGRATE || slot.State.Status == SLOT_STATUS_PRE_MIGRATE {
 			migrateSlots = append(migrateSlots, slot)
 		}
 	}
@@ -130,61 +129,6 @@ func Slots(zkConn zkhelper.Conn, productName string) ([]*Slot, error) {
 	return slots, nil
 }
 
-func NoGroupSlots(zkConn zkhelper.Conn, productName string) ([]*Slot, error) {
-	slots, err := Slots(zkConn, productName)
-	if err != nil {
-		return nil, errors.Trace(err)
-	}
-
-	var ret []*Slot
-	for _, slot := range slots {
-		if slot.GroupId == INVALID_ID {
-			ret = append(ret, slot)
-		}
-	}
-	return ret, nil
-}
-
-func SetSlots(zkConn zkhelper.Conn, productName string, slots []*Slot, groupId int, status SlotStatus) error {
-	if status != SLOT_STATUS_OFFLINE && status != SLOT_STATUS_ONLINE {
-		return errors.Errorf("invalid status")
-	}
-
-	ok, err := GroupExists(zkConn, productName, groupId)
-	if err != nil {
-		return errors.Trace(err)
-	}
-	if !ok {
-		return errors.Errorf("group %d is not found", groupId)
-	}
-
-	for _, s := range slots {
-		s.GroupId = groupId
-		s.State.Status = status
-		data, err := json.Marshal(s)
-		if err != nil {
-			return errors.Trace(err)
-		}
-
-		zkPath := GetSlotPath(productName, s.Id)
-		_, err = zkhelper.CreateOrUpdate(zkConn, zkPath, string(data), 0, zkhelper.DefaultFileACLs(), true)
-		if err != nil {
-			return errors.Trace(err)
-		}
-	}
-
-	param := SlotMultiSetParam{
-		From:    -1,
-		To:      -1,
-		GroupId: groupId,
-		Status:  status,
-	}
-
-	err = NewAction(zkConn, productName, ACTION_TYPE_MULTI_SLOT_CHANGED, param, "", true)
-	return errors.Trace(err)
-
-}
-
 func SetSlotRange(zkConn zkhelper.Conn, productName string, fromSlot, toSlot, groupId int, status SlotStatus) error {
 	if status != SLOT_STATUS_OFFLINE && status != SLOT_STATUS_ONLINE {
 		return errors.Errorf("invalid status")
@@ -202,6 +146,9 @@ func SetSlotRange(zkConn zkhelper.Conn, productName string, fromSlot, toSlot, gr
 		s, err := GetSlot(zkConn, productName, i)
 		if err != nil {
 			return errors.Trace(err)
+		}
+		if s.State.Status != SLOT_STATUS_OFFLINE {
+			return errors.New(fmt.Sprintf("slot %d is not offline, if you want to change the group for a slot, use migrate", s.Id))
 		}
 		s.GroupId = groupId
 		s.State.Status = status
@@ -242,18 +189,20 @@ func (s *Slot) SetMigrateStatus(zkConn zkhelper.Conn, fromGroup, toGroup int) er
 	if fromGroup < 0 || toGroup < 0 {
 		return errors.Errorf("invalid group id, from %d, to %d", fromGroup, toGroup)
 	}
-	// wait until all proxy confirmed
-	err := NewAction(zkConn, s.ProductName, ACTION_TYPE_SLOT_PREMIGRATE, s, "", true)
-	if err != nil {
-		return errors.Trace(err)
+
+	// skip pre_migrate if slot is already migrating
+	if s.State.Status != SLOT_STATUS_MIGRATE {
+		s.State.Status = SLOT_STATUS_PRE_MIGRATE
+		err := s.Update(zkConn)
+		if err != nil {
+			return errors.Trace(err)
+		}
 	}
 
 	s.State.Status = SLOT_STATUS_MIGRATE
 	s.State.MigrateStatus.From = fromGroup
 	s.State.MigrateStatus.To = toGroup
-
 	s.GroupId = toGroup
-
 	return s.Update(zkConn)
 }
 
@@ -281,11 +230,22 @@ func (s *Slot) Update(zkConn zkhelper.Conn) error {
 		return errors.Trace(err)
 	}
 
-	if s.State.Status == SLOT_STATUS_MIGRATE {
-		err = NewAction(zkConn, s.ProductName, ACTION_TYPE_SLOT_MIGRATE, s, "", true)
-	} else {
-		err = NewAction(zkConn, s.ProductName, ACTION_TYPE_SLOT_CHANGED, s, "", true)
+	switch s.State.Status {
+	case SLOT_STATUS_MIGRATE:
+		{
+			err = NewAction(zkConn, s.ProductName, ACTION_TYPE_SLOT_MIGRATE, s, "", true)
+		}
+	case SLOT_STATUS_PRE_MIGRATE:
+		{
+			err = NewAction(zkConn, s.ProductName, ACTION_TYPE_SLOT_PREMIGRATE, s, "", true)
+		}
+	default:
+		{
+			err = NewAction(zkConn, s.ProductName, ACTION_TYPE_SLOT_CHANGED, s, "", true)
+		}
 	}
-
-	return errors.Trace(err)
+	if err != nil {
+		return errors.Trace(err)
+	}
+	return nil
 }

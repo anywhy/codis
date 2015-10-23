@@ -4,6 +4,7 @@
 package router
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -14,14 +15,15 @@ import (
 
 type BackendConn struct {
 	addr string
+	auth string
 	stop sync.Once
 
 	input chan *Request
 }
 
-func NewBackendConn(addr string) *BackendConn {
+func NewBackendConn(addr, auth string) *BackendConn {
 	bc := &BackendConn{
-		addr:  addr,
+		addr: addr, auth: auth,
 		input: make(chan *Request, 1024),
 	}
 	go bc.Run()
@@ -34,6 +36,11 @@ func (bc *BackendConn) Run() {
 		err := bc.loopWriter()
 		if err == nil {
 			break
+		} else {
+			for i := len(bc.input); i != 0; i-- {
+				r := <-bc.input
+				bc.setResponse(r, nil, err)
+			}
 		}
 		log.WarnErrorf(err, "backend conn [%p] to %s, restart [%d]", bc, bc.addr, k)
 		time.Sleep(time.Millisecond * 50)
@@ -52,10 +59,31 @@ func (bc *BackendConn) Close() {
 }
 
 func (bc *BackendConn) PushBack(r *Request) {
+	if r.Wait != nil {
+		r.Wait.Add(1)
+	}
 	bc.input <- r
 }
 
-var ErrZombieRequest = errors.New("request from zombie session")
+func (bc *BackendConn) KeepAlive() bool {
+	if len(bc.input) != 0 {
+		return false
+	}
+	r := &Request{
+		Resp: redis.NewArray([]*redis.Resp{
+			redis.NewBulkBytes([]byte("PING")),
+		}),
+	}
+
+	select {
+	case bc.input <- r:
+		return true
+	default:
+		return false
+	}
+}
+
+var ErrFailedRequest = errors.New("discard failed request")
 
 func (bc *BackendConn) loopWriter() error {
 	r, ok := <-bc.input
@@ -82,7 +110,7 @@ func (bc *BackendConn) loopWriter() error {
 				if err := p.Flush(flush); err != nil {
 					return bc.setResponse(r, nil, err)
 				}
-				bc.setResponse(r, nil, ErrZombieRequest)
+				bc.setResponse(r, nil, ErrFailedRequest)
 			}
 
 			r, ok = <-bc.input
@@ -99,30 +127,75 @@ func (bc *BackendConn) newBackendReader() (*redis.Conn, chan<- *Request, error) 
 	c.ReaderTimeout = time.Minute
 	c.WriterTimeout = time.Minute
 
+	if err := bc.verifyAuth(c); err != nil {
+		c.Close()
+		return nil, nil, err
+	}
+
 	tasks := make(chan *Request, 4096)
 	go func() {
 		defer c.Close()
 		for r := range tasks {
 			resp, err := c.Reader.Decode()
 			bc.setResponse(r, resp, err)
+			if err != nil {
+				// close tcp to tell writer we are failed and should quit
+				c.Close()
+			}
 		}
 	}()
 	return c, tasks, nil
 }
 
+func (bc *BackendConn) verifyAuth(c *redis.Conn) error {
+	if bc.auth == "" {
+		return nil
+	}
+	resp := redis.NewArray([]*redis.Resp{
+		redis.NewBulkBytes([]byte("AUTH")),
+		redis.NewBulkBytes([]byte(bc.auth)),
+	})
+
+	if err := c.Writer.Encode(resp, true); err != nil {
+		return err
+	}
+
+	resp, err := c.Reader.Decode()
+	if err != nil {
+		return err
+	}
+	if resp == nil {
+		return errors.New(fmt.Sprintf("error resp: nil response"))
+	}
+	if resp.IsError() {
+		return errors.New(fmt.Sprintf("error resp: %s", resp.Value))
+	}
+	if resp.IsString() {
+		return nil
+	} else {
+		return errors.New(fmt.Sprintf("error resp: should be string, but got %s", resp.Type))
+	}
+}
+
 func (bc *BackendConn) canForward(r *Request) bool {
-	return r.Owner == nil || !r.Owner.IsZombie()
+	if r.Failed != nil && r.Failed.Get() {
+		return false
+	} else {
+		return true
+	}
 }
 
 func (bc *BackendConn) setResponse(r *Request, resp *redis.Resp, err error) error {
 	r.Response.Resp, r.Response.Err = resp, err
-	if s := r.slot; s != nil {
-		s.jobs.Done()
+	if err != nil && r.Failed != nil {
+		r.Failed.Set(true)
 	}
-	if err != nil && r.Owner != nil {
-		r.Owner.MarkZombie()
+	if r.Wait != nil {
+		r.Wait.Done()
 	}
-	r.Wait.Done()
+	if r.slot != nil {
+		r.slot.Done()
+	}
 	return err
 }
 
@@ -133,8 +206,8 @@ type SharedBackendConn struct {
 	refcnt int
 }
 
-func NewSharedBackendConn(addr string) *SharedBackendConn {
-	return &SharedBackendConn{BackendConn: NewBackendConn(addr), refcnt: 1}
+func NewSharedBackendConn(addr, auth string) *SharedBackendConn {
+	return &SharedBackendConn{BackendConn: NewBackendConn(addr, auth), refcnt: 1}
 }
 
 func (s *SharedBackendConn) Close() bool {
