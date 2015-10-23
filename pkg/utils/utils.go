@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/c4pt0r/cfg"
-	"github.com/ngaut/zkhelper"
+	"github.com/wandoulabs/zkhelper"
 
 	"github.com/wandoulabs/codis/pkg/utils/errors"
 	"github.com/wandoulabs/codis/pkg/utils/log"
@@ -26,14 +26,6 @@ func InitConfig() (*cfg.Cfg, error) {
 	} else {
 		return ret, nil
 	}
-}
-
-func InitConfigFromFile(filename string) (*cfg.Cfg, error) {
-	ret := cfg.NewCfg(filename)
-	if err := ret.Load(); err != nil {
-		return nil, errors.Trace(err)
-	}
-	return ret, nil
 }
 
 func GetZkLock(zkConn zkhelper.Conn, productName string) zkhelper.ZLocker {
