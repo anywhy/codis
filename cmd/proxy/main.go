@@ -1,4 +1,4 @@
-// Copyright 2014 Wandoujia Inc. All Rights Reserved.
+// Copyright 2016 CodisLabs. All Rights Reserved.
 // Licensed under the MIT (MIT-LICENSE.txt) license.
 
 package main
@@ -19,11 +19,11 @@ import (
 
 	"github.com/docopt/docopt-go"
 	"github.com/ngaut/gostats"
-	"github.com/wandoulabs/codis/pkg/proxy"
-	"github.com/wandoulabs/codis/pkg/proxy/router"
-	"github.com/wandoulabs/codis/pkg/utils"
-	"github.com/wandoulabs/codis/pkg/utils/bytesize"
-	"github.com/wandoulabs/codis/pkg/utils/log"
+	"github.com/CodisLabs/codis/pkg/proxy"
+	"github.com/CodisLabs/codis/pkg/proxy/router"
+	"github.com/CodisLabs/codis/pkg/utils"
+	"github.com/CodisLabs/codis/pkg/utils/bytesize"
+	"github.com/CodisLabs/codis/pkg/utils/log"
 )
 
 var (
@@ -104,20 +104,19 @@ func checkUlimit(min int) {
 }
 
 func main() {
-	fmt.Print(banner)
-
-	args, err := docopt.Parse(usage, nil, true, "codis proxy v0.1", true)
+	args, err := docopt.Parse(usage, nil, true, utils.Version, true)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+	fmt.Print(banner)
 
 	// set config file
 	if args["-c"] != nil {
 		configFile = args["-c"].(string)
 	}
 
-	var maxFileFrag = 10
+	var maxFileFrag = 10000000
 	var maxFragSize int64 = bytesize.GB * 1
 	if s, ok := args["--log-filesize"].(string); ok && s != "" {
 		v, err := bytesize.Parse(s)
