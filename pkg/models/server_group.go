@@ -1,4 +1,4 @@
-// Copyright 2014 Wandoujia Inc. All Rights Reserved.
+// Copyright 2016 CodisLabs. All Rights Reserved.
 // Licensed under the MIT (MIT-LICENSE.txt) license.
 
 package models
@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/wandoulabs/codis/pkg/utils"
-	"github.com/wandoulabs/codis/pkg/utils/errors"
-	"github.com/wandoulabs/codis/pkg/utils/log"
+	"github.com/CodisLabs/codis/pkg/utils"
+	"github.com/CodisLabs/codis/pkg/utils/errors"
+	"github.com/CodisLabs/codis/pkg/utils/log"
 	"github.com/wandoulabs/zkhelper"
 )
 
@@ -302,6 +302,9 @@ func (self *ServerGroup) AddServer(zkConn zkhelper.Conn, s *Server, passwd strin
 
 	zkPath := fmt.Sprintf("/zk/codis/db_%s/servers/group_%d/%s", self.ProductName, self.Id, s.Addr)
 	_, err = zkhelper.CreateOrUpdate(zkConn, zkPath, string(val), 0, zkhelper.DefaultFileACLs(), true)
+	if err != nil {
+		return errors.Trace(err)
+	}
 
 	// update servers
 	servers, err = self.GetServers(zkConn)

@@ -1,4 +1,4 @@
-// Copyright 2014 Wandoujia Inc. All Rights Reserved.
+// Copyright 2016 CodisLabs. All Rights Reserved.
 // Licensed under the MIT (MIT-LICENSE.txt) license.
 
 package proxy
@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/c4pt0r/cfg"
-	"github.com/wandoulabs/codis/pkg/utils/log"
+	"github.com/CodisLabs/codis/pkg/utils/log"
 )
 
 type Config struct {
@@ -69,6 +69,10 @@ func LoadConf(configFile string) (*Config, error) {
 	conf.maxTimeout = loadConfInt("session_max_timeout", 1800)
 	conf.maxBufSize = loadConfInt("session_max_bufsize", 131072)
 	conf.maxPipeline = loadConfInt("session_max_pipeline", 1024)
-	conf.zkSessionTimeout = loadConfInt("zk_session_timeout", 30)
+	conf.zkSessionTimeout = loadConfInt("zk_session_timeout", 30000)
+	if conf.zkSessionTimeout <= 100 {
+		conf.zkSessionTimeout *= 1000
+		log.Warn("zkSessionTimeout is to small, it is ms not second")
+	}
 	return conf, nil
 }

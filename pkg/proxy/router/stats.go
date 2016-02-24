@@ -1,4 +1,4 @@
-// Copyright 2014 Wandoujia Inc. All Rights Reserved.
+// Copyright 2016 CodisLabs. All Rights Reserved.
 // Licensed under the MIT (MIT-LICENSE.txt) license.
 
 package router
@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"sync"
 
-	"github.com/wandoulabs/codis/pkg/utils/atomic2"
+	"github.com/CodisLabs/codis/pkg/utils/atomic2"
 )
 
 type OpStats struct {

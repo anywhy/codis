@@ -1,4 +1,4 @@
-// Copyright 2014 Wandoujia Inc. All Rights Reserved.
+// Copyright 2016 CodisLabs. All Rights Reserved.
 // Licensed under the MIT (MIT-LICENSE.txt) license.
 
 package models
@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wandoulabs/codis/pkg/utils/assert"
+	"github.com/CodisLabs/codis/pkg/utils/assert"
 	"github.com/wandoulabs/zkhelper"
 )
 
