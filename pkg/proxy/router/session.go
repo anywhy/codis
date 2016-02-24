@@ -1,4 +1,4 @@
-// Copyright 2014 Wandoujia Inc. All Rights Reserved.
+// Copyright 2016 CodisLabs. All Rights Reserved.
 // Licensed under the MIT (MIT-LICENSE.txt) license.
 
 package router
@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wandoulabs/codis/pkg/proxy/redis"
-	"github.com/wandoulabs/codis/pkg/utils/atomic2"
-	"github.com/wandoulabs/codis/pkg/utils/errors"
-	"github.com/wandoulabs/codis/pkg/utils/log"
+	"github.com/CodisLabs/codis/pkg/proxy/redis"
+	"github.com/CodisLabs/codis/pkg/utils/atomic2"
+	"github.com/CodisLabs/codis/pkg/utils/errors"
+	"github.com/CodisLabs/codis/pkg/utils/log"
 )
 
 type Session struct {
@@ -30,7 +30,6 @@ type Session struct {
 
 	quit   bool
 	failed atomic2.Bool
-	closed atomic2.Bool
 }
 
 func (s *Session) String() string {
@@ -61,13 +60,7 @@ func NewSessionSize(c net.Conn, auth string, bufsize int, timeout int) *Session 
 }
 
 func (s *Session) Close() error {
-	s.failed.Set(true)
-	s.closed.Set(true)
 	return s.Conn.Close()
-}
-
-func (s *Session) IsClosed() bool {
-	return s.closed.Get()
 }
 
 func (s *Session) Serve(d Dispatcher, maxPipeline int) {
@@ -78,18 +71,19 @@ func (s *Session) Serve(d Dispatcher, maxPipeline int) {
 		} else {
 			log.Infof("session [%p] closed: %s, quit", s, s)
 		}
+		s.Close()
 	}()
 
 	tasks := make(chan *Request, maxPipeline)
 	go func() {
 		defer func() {
-			s.Close()
 			for _ = range tasks {
 			}
 		}()
 		if err := s.loopWriter(tasks); err != nil {
 			errlist.PushBack(err)
 		}
+		s.Close()
 	}()
 
 	defer close(tasks)

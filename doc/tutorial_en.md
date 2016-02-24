@@ -1,6 +1,6 @@
 # Codis Tutorial
 
-Codes is a distributed Redis solution, there is no obvious difference between connecting to a Codis proxy and an original Redis server(?), top layer application can connect to Codis as normal standalone Redis, Codis will forward low layer requests. Hot data migration and all things in the shadow are transparent to client. Simply treat Coids as a Redis service with unlimited RAM. 
+Codis is a distributed Redis solution, there is no obvious difference between connecting to a Codis proxy and an original Redis server(?), top layer application can connect to Codis as normal standalone Redis, Codis will forward low layer requests. Hot data migration and all things in the shadow are transparent to client. Simply treat Codis as a Redis service with unlimited RAM. 
 
 Codis has four parts:
 * Codis Proxy(proxy)
@@ -10,7 +10,7 @@ Codis has four parts:
 
 `codis-proxy` is the proxy service of client connections, `codis-proxy` is a Redis protocol implementation, perform as an original Redis(just like Twemproxy). You can deploy multiple `codis-proxy` for one business, `codis-proxy` is none-stateful.
 
-`codis-config` is the configuration to for Codis, support actions like add/remove Redis node, add/remove Proxy node and start data migaration, etc. `codis-config` has a built-in http server which can start a dashboard for user to monitor the status of Codis cluster in browser.
+`codis-config` is the configuration to for Codis, support actions like add/remove Redis node, add/remove Proxy node and start data migration, etc. `codis-config` has a built-in http server which can start a dashboard for user to monitor the status of Codis cluster in browser.
 
 `codis-server` is a branch of Redis maintain by Codis project, based on 2.8.13, add support for slot and atomic data migration. `codis-proxy` and `codis-config` can only work properly with this specific version of Redis.
 
@@ -20,14 +20,11 @@ Codis support namespace, configs of products with different name  won’t be con
 
 ## Build codis-proxy & codis-config
 
-Install Go please check [this document](https://github.com/astaxie/build-web-application-with-golang/blob/master/ebook/01.1.md). Then follow these hints:
 
-```
-go get -d github.com/wandoulabs/codis
-cd $GOPATH/src/github.com/wandoulabs/codis
-./bootstrap.sh
-make gotest
-```
+* install go [see official doc](https://golang.org/doc/install)
+* set $GOPATH correctly and set PATH=$GOPATH/bin:$PATH to execute commands installed by `go get`
+* execute `go get -u -d github.com/CodisLabs/codis` to download codis
+* change directory to `$GOPATH/src/github.com/CodisLabs/codis` and execute `make` to compile, execute `make gotest` to run unit test
 
 Two executable file `codas-config` and `codis-proxy` should be generated in `codis/bin`(`bin/assets` is the resources for `codis-config` dashboard, should be placed at same directory with `codis-config`).
 
@@ -69,7 +66,7 @@ options:
 ### Configuration file
 `codis-config` and `codis-proxy` will take `config.ini` in current directory by default without a specific `-c`.
 
-See [config.ini](https://github.com/wandoulabs/codis/blob/master/config.ini)'s comments.
+See [config.ini](https://github.com/CodisLabs/codis/blob/master/config.ini)'s comments.
 
 ### Workflow
 0. Execute `codis-config dashboard` , start dashboard.
@@ -111,7 +108,7 @@ $ bin/codis-config server add 2 localhost:6480 slave
 
 4. Config slot range of server group
 
-Codes implement data segmentation with Pre-sharding mechanism, 1024 slots will be segmented by default,a single key use following formula to determine which slot to resident, each slot has a server group id represents the server group which will provide service.
+Codis implement data segmentation with Pre-sharding mechanism, 1024 slots will be segmented by default,a single key use following formula to determine which slot to resident, each slot has a server group id represents the server group which will provide service.
 
 ```
 $ bin/codis-config slot -h                                                                                                                                                                                                                     
@@ -180,11 +177,11 @@ Requirements:
 
 Codis's proxy is stateless so you can run more than one proxies to get high availability and horizontal scalability.
 
-For Java users, you can use a modified Jedis, [Jodis](https://github.com/wandoulabs/jodis). It will watch the ZooKeeper to get the real-time available proxies, then query via them using a round robin policy to balance load and detect proxy online and offline automatically.
-If asynchronous request is required, you can use [Nedis](https://github.com/wandoulabs/nedis) which is implemented based on Netty.
+For Java users, you can use a modified Jedis, [Jodis](https://github.com/CodisLabs/jodis). It will watch the ZooKeeper to get the real-time available proxies, then query via them using a round robin policy to balance load and detect proxy online and offline automatically.
+If asynchronous request is required, you can use [Nedis](https://github.com/CodisLabs/nedis) which is implemented based on Netty.
 
 For redis instances, the designers of codis think when a master down, system administrator should know about it and promote a slave to master by hand, not automatically. Because a crashed master may result in the data in this group not consistent.
 But we also offer a solution: [codis-ha](https://github.com/ngaut/codis-ha)。It is a tool using codis rest api to promote a slave to master when it find the master down.
 
-When codis promote one slave instantce to master, other slaves will not change there status. These slaves will still try to sync from the old crashed master, so the data in this group is not consistent.
+When codis promote one slave instance to master, other slaves will not change there status. These slaves will still try to sync from the old crashed master, so the data in this group is not consistent.
 Because the `slave of` command in redis will let a slave drop its data and sync from the new master, it will make the master a little slow on handling queries.So you should change the status by hand after your acknowledgement by using `codis-config server add <group_id> <redis_addr> slave` to refresh the status of remain slaves. Codis-ha won't do this.

@@ -1,4 +1,4 @@
-// Copyright 2014 Wandoujia Inc. All Rights Reserved.
+// Copyright 2016 CodisLabs. All Rights Reserved.
 // Licensed under the MIT (MIT-LICENSE.txt) license.
 
 package main
@@ -10,10 +10,10 @@ import (
 
 	"github.com/wandoulabs/zkhelper"
 
-	"github.com/wandoulabs/codis/pkg/models"
-	"github.com/wandoulabs/codis/pkg/utils"
-	"github.com/wandoulabs/codis/pkg/utils/errors"
-	"github.com/wandoulabs/codis/pkg/utils/log"
+	"github.com/CodisLabs/codis/pkg/models"
+	"github.com/CodisLabs/codis/pkg/utils"
+	"github.com/CodisLabs/codis/pkg/utils/errors"
+	"github.com/CodisLabs/codis/pkg/utils/log"
 )
 
 type MigrateTaskInfo struct {
@@ -102,7 +102,6 @@ func (t *MigrateTask) migrateSingleSlot(slotId int, to int) error {
 		log.Warnf("from == to, ignore: %+v", s)
 		return nil
 	}
-
 
 	// modify slot status
 	if err := s.SetMigrateStatus(t.zkConn, from, to); err != nil {

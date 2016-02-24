@@ -1,4 +1,4 @@
-// Copyright 2014 Wandoujia Inc. All Rights Reserved.
+// Copyright 2016 CodisLabs. All Rights Reserved.
 // Licensed under the MIT (MIT-LICENSE.txt) license.
 
 package proxy
@@ -16,9 +16,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wandoulabs/codis/pkg/models"
-	"github.com/wandoulabs/codis/pkg/proxy/router"
-	"github.com/wandoulabs/codis/pkg/utils/log"
+	"github.com/CodisLabs/codis/pkg/models"
+	"github.com/CodisLabs/codis/pkg/proxy/router"
+	"github.com/CodisLabs/codis/pkg/utils/log"
 	"github.com/wandoulabs/go-zookeeper/zk"
 	topo "github.com/wandoulabs/go-zookeeper/zk"
 )
@@ -140,6 +140,12 @@ func (s *Server) handleConns() {
 	for {
 		c, err := s.listener.Accept()
 		if err != nil {
+			if ne, ok := err.(net.Error); ok && ne.Temporary() {
+				log.WarnErrorf(err, "[%p] proxy accept new connection failed, get temporary error", s)
+				time.Sleep(time.Millisecond*10)
+				continue
+			}
+			log.WarnErrorf(err, "[%p] proxy accept new connection failed, get non-temporary error, must shutdown", s)
 			return
 		} else {
 			ch <- c
@@ -407,7 +413,8 @@ func (s *Server) processAction(e interface{}) {
 	for i, seq := range seqs {
 		if s.lastActionSeq < seq {
 			index = i
-			break
+			//break
+			//only handle latest action
 		}
 	}
 
