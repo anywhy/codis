@@ -517,16 +517,12 @@ func apiRemoveFence() (int, string) {
 
 // add remove data
 func apiRedisRemoveData(r *http.Request) (int, string) {
-	// getzk
-	conn := CreateZkConn();
-	defer conn.Close()
-
 	r.ParseForm()
 	valKey := r.FormValue("keyName")
 	// get all server masters, only del master data it can sync slave
-	masters, err := models.ServerMasters(conn, globalEnv.ProductName())
+	masters, err := models.ServerMasters(safeZkConn, globalEnv.ProductName())
 	if (masters == nil || err != nil) {
-		log.Warning(err)
+		log.Warn(err)
 		return 500, err.Error()
 	}
 
@@ -544,7 +540,7 @@ func apiRedisTrash(r *http.Request) (int, string) {
 	network := r.FormValue("network")
 	_,err := flushDB(network)
 	if (err != nil) {
-		log.Warning(err)
+		log.Warn(err)
 		return 500, err.Error()
 	}
 
@@ -557,10 +553,9 @@ func apiRedisStop(r *http.Request) (int, string) {
 	network := r.FormValue("network")
 	_,err := stopRedis(network)
 	if (err != nil) {
-		log.Warning(err)
+		log.Warn(err)
 		return 500, err.Error()
 	}
 
 	return jsonRetSucc()
 }
-
