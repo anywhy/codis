@@ -11,6 +11,7 @@ import (
 
 	"github.com/CodisLabs/codis/pkg/utils/errors"
 	"github.com/CodisLabs/codis/pkg/utils/log"
+	"fmt"
 )
 
 const (
@@ -46,7 +47,7 @@ func callApi(method HttpMethod, apiPath string, params interface{}, retVal inter
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Errorf("can't connect to dashboard, please check 'dashboard_addr' is corrent in config file")
+		log.Errorf(fmt.Sprintf("can't connect to dashboard '%s', please check 'dashboard_addr' is corrent in config file",  globalEnv.DashboardAddr()))
 		return errors.Trace(err)
 	}
 	defer resp.Body.Close()

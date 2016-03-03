@@ -3,13 +3,14 @@ package main
 import (
 	"github.com/garyburd/redigo/redis"
 	"github.com/juju/errors"
+	"github.com/CodisLabs/codis/pkg/utils"
 	log "github.com/ngaut/logging"
 	"strings"
 )
 
 // del data
 func getData(network string, valKey string) (string, error) {
-	conn, err := redis.Dial("tcp", network)
+	conn, err := utils.DialTo(network, globalEnv.Password())
 	defer conn.Close()
 	if (err != nil) {
 		log.Warning(err)
@@ -25,7 +26,7 @@ func getData(network string, valKey string) (string, error) {
 
 // del data
 func delData(network string, valKey string) (int, error)  {
-	conn, err := redis.Dial("tcp", network)
+	conn, err := utils.DialTo(network, globalEnv.Password())
 	defer conn.Close()
 	if (err != nil) {
 		log.Warning(err)
@@ -56,7 +57,7 @@ func delData(network string, valKey string) (int, error)  {
 
 // flush dba
 func flushDB(network string) (int, error)  {
-	conn, err := redis.Dial("tcp", network)
+	conn, err := utils.DialTo(network, globalEnv.Password())
 	defer conn.Close()
 	if (err != nil) {
 		log.Warning(err)
@@ -71,7 +72,7 @@ func flushDB(network string) (int, error)  {
 
 // set data
 func setData(network string, key string, val string) (int, error) {
-	conn, err := redis.Dial("tcp", network)
+	conn, err := utils.DialTo(network, globalEnv.Password())
 	defer conn.Close()
 	if (err != nil) {
 		log.Warning(err)
@@ -85,7 +86,7 @@ func setData(network string, key string, val string) (int, error) {
 
 // set data
 func stopRedis(network string) (int, error) {
-	conn, err := redis.Dial("tcp", network)
+	conn, err := utils.DialTo(network, globalEnv.Password())
 	defer conn.Close()
 	if (err != nil) {
 		log.Warning(err)
