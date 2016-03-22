@@ -2,7 +2,7 @@
 <html class="no-js" ng-app="codisControllers">
 <head>
     <meta charset="utf-8">
-    <title>Bonc-MPFSP</title>
+    <title>BONC-MPFSP</title>
     <style type="text/css">
         .panel-heading {
             overflow: hidden;
@@ -265,7 +265,7 @@
     <div ng-controller="codisServerGroupMainCtl" ng-cloak>
         <div class="row">
             <div class="col-md-12">
-                <h4> 节点组
+                <h4> 分组管理
                     <button ng-click="refresh()" class="btn btn-default btn-sm"><span
                             class="glyphicon glyphicon-refresh"></span></button>
                 </h4>
@@ -354,7 +354,7 @@
     <div ng-controller="codisMigrateCtl" ng-cloak>
         <div class="row">
             <div class="col-md-12">
-                <h4> 数据均匀分布
+                <h4> 数据迁移状态
                     <button ng-click="refresh()" class="btn btn-default btn-sm"><span
                             class="glyphicon glyphicon-refresh"></span></button>
                 </h4>
@@ -362,24 +362,23 @@
 
                 <div class="btn-group btn-group-sm">
                     <button class="btn btn-default btn-sm btn-success" ng-click="rebalance()"><span
-                            class="glyphicon glyphicon-th-large"></span> 自动分配
+                            class="glyphicon glyphicon-th-large"></span> 自动迁移
                     </button>
 
                     <button class="btn btn-default btn-sm" ng-click="migrate()"><span
-                            class="glyphicon glyphicon-plane"></span> 合并 Slot(s)
+                            class="glyphicon glyphicon-plane"></span> 迁移 Slot(s)
                     </button>
                 </div>
                 </p>
                 <table class="table table-bordered" ng-if="migrate_tasks.length>0">
-                    <h5 class="text-muted"> 合并任务信息 </h5>
+                    <h5 class="text-muted"> 迁移任务信息 </h5>
                     <thead>
                     <tr>
-                        <th>合并(Slot)ID</th>
+                        <th>迁移(Slot)ID</th>
                         <th>节点组ID</th>
                         <th>创建时间</th>
                         <th>状态</th>
-                        <th>占比</th>
-                        <th>操作</th>
+                        <th>进度</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -389,19 +388,11 @@
                         <td> [[ task.create_at * 1000| date:'yyyy-MM-dd HH:mm:ss Z']]</td>
                         <td> [[ task.status]]</td>
                         <td> [[ task.percent ]] %</td>
-                        <td>
-                            <button ng-if="task.status == 'pending'" class="btn btn-sm btn-default"
-                                    ng-click="removePendingTask(task)"> 删除
-                            </button>
-                            <button ng-if="task.status == 'migrating'" class="btn btn-default btn-sm btn-danger"
-                                    ng-click="stopRunningTask(task)"> 停止
-                            </button>
-                        </td>
                     </tr>
                     </tbody>
                 </table>
                 <table ng-if="migrate_status.migrate_slots.length > 0" class="table table-bordered">
-                    <h5 ng-if="migrate_status.migrate_slots.length > 0" class="text-muted"> 合并（Slot）信息 </h5>
+                    <h5 ng-if="migrate_status.migrate_slots.length > 0" class="text-muted"> 迁移（Slot）信息 </h5>
                     <thead>
                     <tr>
                         <th>Slot Id</th>
