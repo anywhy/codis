@@ -8,6 +8,8 @@
     "angular-resource" : "latest",
     "highcharts-ng" : "latest",
     "highcharts" : "latest",
-    "font-awesome" : "latest"
+    "font-awesome" : "latest",
+    "jquery-backstretch": "latest",
+    "underscore": "latest"
   }
 }

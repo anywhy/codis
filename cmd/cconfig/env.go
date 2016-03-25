@@ -20,6 +20,7 @@ type Env interface {
 	Password() string
 	DashboardAddr() string
 	NewZkConn() (zkhelper.Conn, error)
+	AuthUsers() map[string] string
 }
 
 type CodisEnv struct {
@@ -28,6 +29,7 @@ type CodisEnv struct {
 	dashboardAddr string
 	productName   string
 	provider      string
+	authUsers     map[string] string
 }
 
 func LoadCodisEnv(cfg *cfg.Cfg) Env {
@@ -58,12 +60,18 @@ func LoadCodisEnv(cfg *cfg.Cfg) Env {
 
 	passwd, _ := cfg.ReadString("password", "")
 
+	usersStr, err := cfg.ReadString("dashboard_users", "bonc@bonc1q2w3e")
+	if(err != nil) {
+		log.PanicErrorf(err, "config: 'dashboard_users' not found")
+	}
+
 	return &CodisEnv{
 		zkAddr:        zkAddr,
 		passwd:        passwd,
 		dashboardAddr: dashboardAddr,
 		productName:   productName,
 		provider:      provider,
+		authUsers:     parseAuthUsers(usersStr),
 	}
 }
 
@@ -91,4 +99,21 @@ func (e *CodisEnv) NewZkConn() (zkhelper.Conn, error) {
 		return zkhelper.NewEtcdConn(addr, 30)
 	}
 	return nil, errors.Errorf("need coordinator in config file, %s", e)
+}
+
+func (e *CodisEnv) AuthUsers() map[string]string {
+	return e.authUsers
+}
+
+/// 解析登录用户名
+func parseAuthUsers(userStr string) map[string]string {
+	var authUsers = make(map[string]string)
+
+	users := strings.Split(userStr, ",")
+	for _, v := range users {
+		info := strings.Split(strings.TrimSpace(v), "@")
+		authUsers[info[0]] = info[1]
+	}
+
+	return authUsers
 }

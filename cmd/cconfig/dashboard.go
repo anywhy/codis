@@ -13,8 +13,10 @@ import (
 
 	stdlog "log"
 
-	"github.com/codegangsta/martini-contrib/binding"
-	"github.com/codegangsta/martini-contrib/render"
+	"github.com/martini-contrib/binding"
+	"github.com/martini-contrib/render"
+	"github.com/martini-contrib/sessionauth"
+	"github.com/martini-contrib/sessions"
 	"github.com/docopt/docopt-go"
 	"github.com/go-martini/martini"
 	"github.com/martini-contrib/cors"
@@ -24,6 +26,8 @@ import (
 	"github.com/CodisLabs/codis/pkg/utils"
 	"github.com/CodisLabs/codis/pkg/utils/errors"
 	"github.com/CodisLabs/codis/pkg/utils/log"
+	"net/http"
+	"strings"
 )
 
 func cmdDashboard(argv []string) (err error) {
@@ -57,9 +61,10 @@ options:
 
 var (
 	proxiesSpeed int64
-	safeZkConn   zkhelper.Conn
+	safeZkConn zkhelper.Conn
 	unsafeZkConn zkhelper.Conn
 )
+var source = []string {".js", ".css", ".jpg", ".otf", ".ico", ".txt"}
 
 func jsonRet(output map[string]interface{}) (int, string) {
 	b, err := json.Marshal(output)
@@ -159,7 +164,7 @@ func releaseDashboardNode() {
 func runDashboard(addr string, httpLogFile string) {
 	log.Infof("dashboard listening on addr: %s", addr)
 	m := martini.Classic()
-	f, err := os.OpenFile(httpLogFile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	f, err := os.OpenFile(httpLogFile, os.O_RDWR | os.O_CREATE | os.O_APPEND, 0666)
 	if err != nil {
 		log.PanicErrorf(err, "open http log file failed")
 	}
@@ -227,9 +232,13 @@ func runDashboard(addr string, httpLogFile string) {
 	m.Post("/api/redis/stop", apiRedisStop)
 
 	m.Get("/slots", pageSlots)
+	m.Get("/admin", func(req *http.Request, r render.Render) {
+		r.HTML(200, "index", nil)
+	})
 	m.Get("/", func(r render.Render) {
 		r.Redirect("/admin")
 	})
+
 	zkBuilder := utils.NewConnBuilder(globalEnv.NewZkConn)
 	safeZkConn = zkBuilder.GetSafeConn()
 	unsafeZkConn = zkBuilder.GetUnsafeConn()
@@ -257,5 +266,79 @@ func runDashboard(addr string, httpLogFile string) {
 		}
 	}()
 
+	// 处理验证
+	provideAuth(m)
+
 	m.RunOnAddr(addr)
+}
+
+func provideAuth(m *martini.ClassicMartini) {
+	// login
+	store := sessions.NewCookieStore([]byte("CodisAuth"))
+	store.Options(sessions.Options{
+		MaxAge: 1800,
+	})
+	m.Use(sessions.Sessions("s", store))
+	m.Use(sessionauth.SessionUser(GenerateAnonymousUser))
+	sessionauth.RedirectUrl = "/login"
+	sessionauth.RedirectParam = "s"
+
+	m.Get("/login", func(req *http.Request, r render.Render) {
+		r.HTML(200, "login", nil)
+	})
+
+	m.Post("/login", binding.Bind(CodisUser{}), func(session sessions.Session, user CodisUser, r render.Render, req *http.Request) {
+		storePass := globalEnv.AuthUsers()[user.Username]
+		if user.Username == "" || user.Password == "" || storePass == "" {
+			r.HTML(200, "login", map[string]string{"error": "true", "message":"用户名或密码错误！", "name": user.Username})
+			return
+		} else {
+			if user.Password != storePass {
+				r.HTML(200, "login", map[string]string{"error": "true", "message":"用户名或密码错误！", "name": user.Username})
+				return
+			}
+
+			user.Id = user.Username
+			err := sessionauth.AuthenticateSession(session, &user)
+			if err != nil {
+				r.JSON(500, err)
+			}
+
+			params := req.URL.Query()
+			redirect := params.Get(sessionauth.RedirectParam)
+			r.Redirect(redirect)
+			return
+		}
+	})
+
+	m.Get("/logout", sessionauth.LoginRequired, func(session sessions.Session, user sessionauth.User, r render.Render) {
+		sessionauth.Logout(session, user)
+		r.Redirect("/login")
+	})
+
+	//浏览器访问需要登录
+	m.Use(func(c martini.Context, req *http.Request, user sessionauth.User, r render.Render) {
+		reqUrl := req.URL.Path
+		if strings.HasPrefix(req.UserAgent(), "Go") || strings.HasPrefix(reqUrl, "/login") {
+			c.Next()
+		} else {
+			if (!validateSource(reqUrl)) {
+				sessionauth.LoginRequired(r, user, req)
+			}
+			c.Next()
+		}
+	})
+}
+
+func validateSource(str string) bool {
+	validate := false;
+
+	for _, v := range source {
+		if (strings.HasSuffix(str, v)) {
+			validate = true
+			break
+		}
+	}
+
+	return validate;
 }

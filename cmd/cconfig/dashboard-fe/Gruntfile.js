@@ -176,7 +176,7 @@ module.exports = function (grunt) {
           src: [
             '<%= config.dist %>/scripts/{,*/}*.js',
             '<%= config.dist %>/styles/{,*/}*.css',
-            '<%= config.dist %>/images/{,*/}*.*',
+            // '<%= config.dist %>/images/{,*/}*.*',
             '<%= config.dist %>/styles/fonts/{,*/}*.*',
             '<%= config.dist %>/*.{ico,png}'
           ]
@@ -197,10 +197,10 @@ module.exports = function (grunt) {
     // Performs rewrites based on rev and the useminPrepare configuration
     usemin: {
       options: {
-        assetsDirs: ['<%= config.dist %>', '<%= config.dist %>/images']
+        assetsDirs: ['<%= config.dist %>', '<%= config.dist %>/images','<%= config.dist %>/styles']
       },
       html: ['<%= config.dist %>/{,*/}*.html'],
-      css: ['<%= config.dist %>/styles/{,*/}*.css']
+      css: ['<%= config.dist %>/styles/{,*/}*.css', '<%= config.dist %>/styles/login/{,*/}*.css']
     },
 
     // The following *-min tasks produce minified files in the dist folder
@@ -245,6 +245,27 @@ module.exports = function (grunt) {
           src: '{,*/}*.html',
           dest: '<%= config.dist %>'
         }]
+      }
+    },
+
+    cssmin: {
+      dist: {
+        files: {
+          '<%= config.dist %>/styles/login/login-form.css': [
+            '.tmp/styles/login/{,*/}*.css'
+          ]
+        }
+      }
+    },
+
+    uglify: {
+      dist: {
+        files: {
+          '<%= config.dist %>/scripts/utils.js': [
+            '<%= config.app %>/scripts/md5.js',
+            '<%= config.app %>/scripts/utils.js'
+          ]
+        }
       }
     },
 
