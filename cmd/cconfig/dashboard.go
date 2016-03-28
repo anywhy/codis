@@ -236,7 +236,7 @@ func runDashboard(addr string, httpLogFile string) {
 		r.HTML(200, "index", nil)
 	})
 	m.Get("/", func(r render.Render) {
-		r.Redirect("/admin")
+		r.Redirect("/admin/")
 	})
 
 	zkBuilder := utils.NewConnBuilder(globalEnv.NewZkConn)
@@ -319,7 +319,10 @@ func provideAuth(m *martini.ClassicMartini) {
 	//浏览器访问需要登录
 	m.Use(func(c martini.Context, req *http.Request, user sessionauth.User, r render.Render) {
 		reqUrl := req.URL.Path
-		if strings.HasPrefix(req.UserAgent(), "Go") || strings.HasPrefix(reqUrl, "/login") {
+		apiKey := req.Header.Get("X-API-KEY")
+		log.Debugf("API-KEY: %s", apiKey)
+		// 判断是否需要登录
+		if apiKey == GenApiKey() || strings.HasPrefix(reqUrl, "/login") {
 			c.Next()
 		} else {
 			if (!validateSource(reqUrl)) {
