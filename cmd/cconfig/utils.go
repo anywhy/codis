@@ -9,10 +9,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/CodisLabs/codis/pkg/utils"
 	"github.com/CodisLabs/codis/pkg/utils/errors"
 	"github.com/CodisLabs/codis/pkg/utils/log"
 	"fmt"
-	"encoding/base64"
 )
 
 const (
@@ -47,7 +47,7 @@ func callApi(method HttpMethod, apiPath string, params interface{}, retVal inter
 	}
 
 	// 加入内部请求api key
-	req.Header.Set("X-API-KEY", GenApiKey());
+	req.Header.Set("X-API-KEY", utils.GenApiKey());
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Errorf(fmt.Sprintf("can't connect to dashboard '%s', please check 'dashboard_addr' is corrent in config file",  globalEnv.DashboardAddr()))
@@ -70,7 +70,3 @@ func callApi(method HttpMethod, apiPath string, params interface{}, retVal inter
 	return errors.Errorf("http status code %d, %s", resp.StatusCode, string(body))
 }
 
-func GenApiKey() string {
-
-	return base64.StdEncoding.EncodeToString([]byte("admin:api"));
-}

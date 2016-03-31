@@ -322,7 +322,7 @@ func provideAuth(m *martini.ClassicMartini) {
 		apiKey := req.Header.Get("X-API-KEY")
 		log.Debugf("API-KEY: %s", apiKey)
 		// 判断是否需要登录
-		if apiKey == GenApiKey() || strings.HasPrefix(reqUrl, "/login") {
+		if apiKey == utils.GenApiKey()|| strings.HasPrefix(reqUrl, "/login") {
 			c.Next()
 		} else {
 			if (!validateSource(reqUrl)) {

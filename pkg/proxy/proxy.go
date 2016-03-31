@@ -4,9 +4,7 @@
 package proxy
 
 import (
-	"bytes"
 	"encoding/json"
-	"errors"
 	"net"
 	"net/http"
 	"os"
@@ -21,6 +19,9 @@ import (
 	"github.com/CodisLabs/codis/pkg/utils/log"
 	"github.com/wandoulabs/go-zookeeper/zk"
 	topo "github.com/wandoulabs/go-zookeeper/zk"
+	"github.com/CodisLabs/codis/pkg/utils"
+	"errors"
+	"io/ioutil"
 )
 
 type Server struct {
@@ -95,13 +96,37 @@ func (s *Server) SetMyselfOnline() error {
 	}
 	b, _ := json.Marshal(info)
 	url := "http://" + s.conf.dashboardAddr + "/api/proxy"
-	res, err := http.Post(url, "application/json", bytes.NewReader(b))
+	client := &http.Client{Transport: http.DefaultTransport}
+
+	req, err := http.NewRequest(string("POST"), url, strings.NewReader(string(b)))
 	if err != nil {
 		return err
 	}
-	if res.StatusCode != 200 {
+
+	// 加入内部请求api key
+	req.Header.Set("X-API-KEY", utils.GenApiKey());
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+	body, _ := ioutil.ReadAll(resp.Body)
+	log.Debugf("mark myself online result: %s", string(body))
+
+	if resp.StatusCode != 200 {
 		return errors.New("response code is not 200")
 	}
+
+	//res, err := http.Post(url, "application/json", bytes.NewReader(b))
+	//if err != nil {
+	//	return err
+	//}
+	//if res.StatusCode != 200 {
+	//	return errors.New("response code is not 200")
+	//}
 	return nil
 }
 
