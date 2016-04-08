@@ -13,6 +13,7 @@ import (
 
 	"github.com/CodisLabs/codis/pkg/utils/errors"
 	"github.com/CodisLabs/codis/pkg/utils/log"
+	"encoding/base64"
 )
 
 func InitConfig() (*cfg.Cfg, error) {
@@ -54,4 +55,9 @@ func (s1 Strings) Eq(s2 []string) bool {
 		}
 	}
 	return true
+}
+
+func GenApiKey() string {
+
+	return base64.StdEncoding.EncodeToString([]byte("admin:api"));
 }
