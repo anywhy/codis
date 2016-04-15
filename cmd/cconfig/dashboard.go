@@ -31,11 +31,12 @@ import (
 )
 
 func cmdDashboard(argv []string) (err error) {
-	usage := `usage: codis-config dashboard [--addr=<address>] [--http-log=<log_file>]
+	usage := `usage: codis-config dashboard [--addr=<address>] [--http-log=<log_file>] [--codis-ha=<codis-ha>]
 
 options:
 	--addr	listen ip:port, e.g. localhost:18087, :18087, [default: :18087]
 	--http-log	http request log [default: request.log ]
+	--codis-ha=<codis-ha>  listen group promote slave to master [default: true]
 `
 
 	args, err := docopt.Parse(usage, argv, true, "", false)
@@ -55,7 +56,12 @@ options:
 		addr = args["--addr"].(string)
 	}
 
-	runDashboard(addr, logFileName)
+	codisHA := true
+	if args["--codis-ha"] != nil {
+		codisHA = ("true" == args["--codis-ha"].(string))
+	}
+
+	runDashboard(addr, logFileName, codisHA)
 	return nil
 }
 
@@ -139,7 +145,14 @@ func createDashboardNode() error {
 	// make sure we're the only one dashboard
 	if exists, _, _ := safeZkConn.Exists(zkPath); exists {
 		data, _, _ := safeZkConn.Get(zkPath)
-		return errors.New("dashboard already exists: " + string(data))
+		var reStart string
+		fmt.Println("dashboard already exists, are you sure restart? Y/N")
+		fmt.Scanln(&reStart)
+		if reStart == "Y" {
+			releaseDashboardNode()
+		} else {
+			return errors.New("dashboard already exists: " + string(data))
+		}
 	}
 
 	content := fmt.Sprintf(`{"addr": "%v", "pid": %v}`, globalEnv.DashboardAddr(), os.Getpid())
@@ -161,7 +174,7 @@ func releaseDashboardNode() {
 	}
 }
 
-func runDashboard(addr string, httpLogFile string) {
+func runDashboard(addr string, httpLogFile string, codisHA bool) {
 	log.Infof("dashboard listening on addr: %s", addr)
 	m := martini.Classic()
 	f, err := os.OpenFile(httpLogFile, os.O_RDWR | os.O_CREATE | os.O_APPEND, 0666)
@@ -265,6 +278,15 @@ func runDashboard(addr string, httpLogFile string) {
 			atomic.StoreInt64(&proxiesSpeed, qps)
 		}
 	}()
+
+	// start ha
+	if codisHA {
+		go func() {
+			log.Infof("wait for 30's to start HA monitor...")
+			time.Sleep(30 * time.Second)
+			StartHA()
+		}()
+	}
 
 	// 处理验证
 	provideAuth(m)

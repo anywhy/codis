@@ -15,6 +15,7 @@ import (
 	"github.com/CodisLabs/codis/pkg/utils/atomic2"
 	"github.com/CodisLabs/codis/pkg/utils/errors"
 	"github.com/CodisLabs/codis/pkg/utils/log"
+	"strings"
 )
 
 type Session struct {
@@ -385,4 +386,18 @@ func (s *Session) handleRequestMDel(r *Request, d Dispatcher) (*Request, error) 
 
 func microseconds() int64 {
 	return time.Now().UnixNano() / int64(time.Microsecond)
+}
+
+
+func parseScanRequest(r *Request) (int, *Request) {
+	cursor := string(r.Resp.Array[1].Value)
+	if strings.Contains(cursor, ":") {
+		info := strings.Split(cursor, ":")
+		r.Resp.Array[1].Value = []byte(info[1])
+		slot, _ := strconv.Atoi(info[0])
+		return slot, r
+	}
+
+	slot, _ := strconv.Atoi(cursor)
+	return slot, r
 }

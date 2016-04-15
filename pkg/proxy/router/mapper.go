@@ -28,9 +28,10 @@ var (
 	blacklist = make(map[string]bool)
 )
 
+//update support "SCAN",
 func init() {
 	for _, s := range []string{
-		"KEYS", "MOVE", "OBJECT", "RENAME", "RENAMENX", "SCAN", "BITOP", "MSETNX", "MIGRATE", "RESTORE",
+		"KEYS", "MOVE", "OBJECT", "RENAME", "RENAMENX", "BITOP", "MSETNX", "MIGRATE", "RESTORE",
 		"BLPOP", "BRPOP", "BRPOPLPUSH", "PSUBSCRIBE", "PUBLISH", "PUNSUBSCRIBE", "SUBSCRIBE", "RANDOMKEY",
 		"UNSUBSCRIBE", "DISCARD", "EXEC", "MULTI", "UNWATCH", "WATCH", "SCRIPT",
 		"BGREWRITEAOF", "BGSAVE", "CLIENT", "CONFIG", "DBSIZE", "DEBUG", "FLUSHALL", "FLUSHDB",

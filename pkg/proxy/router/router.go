@@ -10,6 +10,7 @@ import (
 	"github.com/CodisLabs/codis/pkg/models"
 	"github.com/CodisLabs/codis/pkg/utils/errors"
 	"github.com/CodisLabs/codis/pkg/utils/log"
+	"strconv"
 )
 
 const MaxSlotNum = models.DEFAULT_SLOT_NUM
@@ -88,6 +89,11 @@ func (s *Router) KeepAlive() error {
 }
 
 func (s *Router) Dispatch(r *Request) error {
+	// do Scan
+	if r.OpStr == "SCAN" {
+		return s.scanDispatch(r)
+	}
+
 	hkey := getHashKey(r.Resp, r.OpStr)
 	slot := s.slots[hashSlot(hkey)]
 	return slot.forward(r, hkey)
@@ -166,4 +172,38 @@ func (s *Router) fillSlot(i int, addr, from string, lock bool) {
 		log.Infof("fill slot %04d, backend.addr = %s",
 			i, slot.backend.addr)
 	}
+}
+
+// scan every redis instance
+func (s *Router) scanDispatch(r *Request) error {
+	slotIndex, newR := parseScanRequest(r)
+	slot := s.slots[slotIndex]
+	newR.Coalesce = func() error {
+		if err := r.Response.Err; err != nil {
+			return err
+		}
+		cursor, err := strconv.Atoi(string(r.Response.Resp.Array[0].Value))
+		log.Debugf("scan result slot: %s cursor :%s", strconv.Itoa(slotIndex), strconv.Itoa(cursor))
+		if err != nil {
+			return err
+		}
+
+		if cursor == 0 {
+			for slotIndex < MaxSlotNum - 1 {
+				slotIndex = slotIndex + 1
+				temSlot := s.slots[slotIndex]
+				if slot.RedisAddr() != temSlot.RedisAddr() {
+					break
+				}
+			}
+		}
+		if slotIndex != MaxSlotNum - 1 {
+			cursorStr := string(strconv.Itoa(slotIndex) + ":" + strconv.Itoa(cursor))
+			r.Response.Resp.Array[0].Value = []byte(cursorStr)
+		}
+
+		return nil
+	}
+
+	return slot.forward(newR, []byte(""))
 }

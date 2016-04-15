@@ -1,6 +1,7 @@
 #! /bin/bash
 #install path
-install_path=/opt/beh/core/codis3
+#install_path=/opt/beh/core/codis3
+read -p "please input install path (e.g:/opt/beh/core/codis ):"  install_path
 # master index
 master_index=1
 

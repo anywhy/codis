@@ -172,3 +172,16 @@ func SlaveNoOne(addr, passwd string) error {
 	}
 	return nil
 }
+
+func BgSave(addr string, passwd string) error {
+	c, err := DialTo(addr, passwd)
+	if err != nil {
+		return err
+	}
+	defer c.Close()
+
+	if _, err = c.Do("BGSAVE"); err != nil {
+		return errors.Trace(err)
+	}
+	return nil
+}

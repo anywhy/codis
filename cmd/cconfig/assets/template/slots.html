@@ -1,19 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-	<title>Slots</title>
-  <link href="/bootstrap.min.css" rel="stylesheet">
-  <style>
-    body {
+<!DOCTYPE html> <html lang=en> <head> <title>Slots</title> <link rel=stylesheet href=/styles/2575058f.vendor.css> <style>body {
       padding: 20px;
     }
     td {
       cursor: pointer;
-    }
-  </style>
-</head>
-<script type="text/template" id="slot-info-tmpl">
-<table class="table table-bordered">
+    }</style>  <script type=text/template id=slot-info-tmpl><table class="table table-bordered">
   <tr>
     <td>Slot ID</td><td><%= id %></td>
   </tr>
@@ -39,30 +29,7 @@
   <tr>
     <td>Last Op Ts</td><td><%= new Date(state.last_op_ts * 1000) %></td>
   </tr>
-</table>
-</script>
-<body>
-  <h4>Slots Status</h4>
-  <hr>
-  <div class="row">
-    <div class="col-md-4">
-      <p id="output"></p>
-    </div>
-  </div>
-  <div class="row">
-    <div class="col-md-12">
-      <table id="tbl-status" class="table table-bordered"></table>
-    </div>
-  </div>
-</body>
-<script src="/md5.js"></script>
-<script src="/utils.js"></script>
-<script src="/jquery.min.js"></script>
-<script src="/underscore-min.js"></script>
-<script src="/bootstrap.min.js"></script>
-<script type="text/javascript">
-
-  $(document).ready(function(){
+</table></script> <body> <h4>Slots Status</h4> <hr> <div class=row> <div class=col-md-4> <p id=output></p> </div> </div> <div class=row> <div class=col-md-12> <table id=tbl-status class="table table-bordered"></table> </div> </div>  <script src=/scripts/09694371.utils.js></script> <script src=/scripts/f89d582e.vendor.js></script> <script type=text/javascript>$(document).ready(function(){
     var slots_info;
     $.get('/api/slots', function(ret) {
       var slots = JSON.parse(ret)
@@ -122,7 +89,4 @@
       });
     });
 
-  });
-</script>
-
-</html>
+  });</script> 

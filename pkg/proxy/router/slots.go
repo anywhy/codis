@@ -124,3 +124,8 @@ func (s *Slot) slotsmgrt(r *Request, key []byte) error {
 		return errors.New(fmt.Sprintf("error resp: should be integer, but got %s", resp.Type))
 	}
 }
+
+func (s *Slot) RedisAddr() string {
+
+	return s.backend.addr
+}
