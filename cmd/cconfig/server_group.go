@@ -128,3 +128,23 @@ func runRemoveServerFromGroup(groupId int, addr string) error {
 	fmt.Println(jsonify(v))
 	return nil
 }
+
+func runGetServerGroups() ([]models.ServerGroup, error){
+	var v []models.ServerGroup
+	err := callApi(METHOD_GET, "/api/server_groups", nil, &v)
+	if err != nil {
+		return nil, err
+	}
+
+	return v, nil;
+}
+
+func runGetServerGroup(groupId int) (models.ServerGroup, error) {
+	var v models.ServerGroup
+	err := callApi(METHOD_GET, fmt.Sprintf("/api/server_group/%d", groupId), nil, &v)
+	if err != nil {
+		return models.ServerGroup{}, err
+	}
+
+	return v, nil;
+}

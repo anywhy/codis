@@ -5,6 +5,9 @@ import (
 	"github.com/CodisLabs/codis/pkg/models"
 	"github.com/juju/errors"
 	"github.com/CodisLabs/codis/pkg/utils/log"
+	"github.com/CodisLabs/codis/pkg/utils"
+	"github.com/docopt/docopt-go"
+	"strconv"
 )
 
 type aliveCheckerFactory func(addr string, defaultTimeout time.Duration) AliveChecker
@@ -17,11 +20,44 @@ var (
 			passwd: globalEnv.Password(),
 		}
 	}
+
+	saveMap = make(map[int]string)
 )
 
-func StartHA() {
+func cmdCodisHA(argv []string) (err error) {
+	usage := `usage: codis-config codis-ha [--interval=<seconds>]
+
+options:
+	--interval=<seconds>	set monitor ha interval [default: 3]
+`
+
+	args, err := docopt.Parse(usage, argv, true, "", false)
+	if err != nil {
+		log.ErrorErrorf(err, "parse args failed")
+		return err
+	}
+	log.Debugf("parse args = {%+v}", args)
+
+	interval := 3
+	if s, ok := args["--interval"].(string); ok && s != "" {
+		n, err := strconv.Atoi(s);
+		if (err != nil) {
+			log.Error(err)
+		}
+		if n <= 0 {
+			log.Panicf("option --interval = %d", n)
+		}
+		interval = n
+	}
+
+	runCodisHA(interval)
+
+	return nil
+}
+
+func runCodisHA(interval int) {
 	for {
-		groups, err := models.ServerGroups(safeZkConn, globalEnv.ProductName())
+		groups, err := runGetServerGroups()
 		if err != nil {
 			log.Error(err)
 			return
@@ -29,7 +65,7 @@ func StartHA() {
 
 		CheckAliveAndPromote(groups)
 		CheckOfflineAndPromoteSlave(groups)
-		time.Sleep(10 * time.Second)
+		time.Sleep(time.Duration(interval) * time.Second)
 	}
 }
 
@@ -58,7 +94,7 @@ func verifyAndUpServer(checker AliveChecker, errCtx interface{}) {
 }
 
 func getSlave(master *models.Server) (*models.Server, error) {
-	group, err := models.GetGroup(safeZkConn, globalEnv.ProductName(), master.GroupId)
+	group, err := runGetServerGroup(master.GroupId)
 	if err != nil {
 		return nil, errors.Trace(err)
 	}
@@ -82,11 +118,22 @@ func handleCrashedServer(s *models.Server) error {
 			return err
 		}
 
-		log.Infof("try promote %+v", slave)
+		if save, err := utils.GetSaveInfo(slave.Addr, globalEnv.Password()); err == nil {
+			saveMap[slave.GroupId] = save
+			log.Infof("cache group_id:%s, slave(addr:%s) strategy:%s", strconv.Itoa(slave.GroupId), slave.Addr, save)
+		}
+
+		log.Infof("try promote to master %+v", slave)
 		err = runPromoteServerToMaster(slave.GroupId, slave.Addr)
 		if err != nil {
 			log.Errorf("do promote %v failed %v", slave, errors.ErrorStack(err))
 			return err
+		}
+		log.Infof("try promote to master success %+v", slave)
+		log.Infof("make master save \"\", group_id:%s, master:%s", strconv.Itoa(slave.GroupId), slave.Addr)
+		err = utils.SetSaveInfo(slave.Addr, globalEnv.Password(), "");
+		if err != nil {
+			log.Errorf("do make master save \"\" %v failed %v", slave, errors.ErrorStack(err))
 		}
 	case models.SERVER_TYPE_SLAVE:
 		log.Errorf("slave is down: %+v", s)
@@ -103,11 +150,19 @@ func handleAddServer(s *models.Server) {
 	s.Type = models.SERVER_TYPE_SLAVE
 	log.Infof("try reusing slave %+v", s)
 	err := runAddServerToGroup(s.GroupId, s.Addr, s.Type)
-	log.Errorf("do reusing slave %v failed %v", s, errors.ErrorStack(err))
+	if (err == nil) {
+		save := saveMap[s.GroupId]
+		log.Infof("add slave(addr:%s, save:%s) to group_id:%s, ", s.Addr, save, strconv.Itoa(s.GroupId))
+		err = utils.SetSaveInfo(s.Addr, globalEnv.Password(), save);
+	}
+
+	if (err != nil) {
+		log.Errorf("do reusing slave %v failed %v", s, errors.ErrorStack(err))
+	}
 }
 
 //ping codis-server find crashed codis-server
-func CheckAliveAndPromote(groups []*models.ServerGroup) ([]models.Server, error) {
+func CheckAliveAndPromote(groups []models.ServerGroup) ([]models.Server, error) {
 	errCh := make(chan interface{}, 100)
 	var serverCnt int
 	for _, group := range groups {
@@ -143,7 +198,7 @@ func CheckAliveAndPromote(groups []*models.ServerGroup) ([]models.Server, error)
 }
 
 //ping codis-server find node up with type offine
-func CheckOfflineAndPromoteSlave(groups []*models.ServerGroup) ([]models.Server, error) {
+func CheckOfflineAndPromoteSlave(groups []models.ServerGroup) ([]models.Server, error) {
 	for _, group := range groups {
 		//each group
 		for _, s := range group.Servers {

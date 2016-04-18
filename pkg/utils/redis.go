@@ -173,15 +173,24 @@ func SlaveNoOne(addr, passwd string) error {
 	return nil
 }
 
-func BgSave(addr string, passwd string) error {
+func GetSaveInfo(addr string, passwd string) (string, error) {
+	c, err := DialTo(addr, passwd)
+	if err != nil {
+		return "", err
+	}
+	defer c.Close()
+
+	vals, err := redis.Strings(c.Do("CONFIG", "GET", "save"))
+	return vals[1], err
+}
+
+func SetSaveInfo(addr string, passwd string, params string) error {
 	c, err := DialTo(addr, passwd)
 	if err != nil {
 		return err
 	}
 	defer c.Close()
 
-	if _, err = c.Do("BGSAVE"); err != nil {
-		return errors.Trace(err)
-	}
-	return nil
+	_, err = c.Do("CONFIG", "SET", "save", params)
+	return err
 }

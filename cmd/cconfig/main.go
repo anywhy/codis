@@ -50,6 +50,7 @@ commands:
 	dashboard
 	action
 	proxy
+	codis-ha
 `
 
 func init() {
@@ -89,6 +90,8 @@ func runCommand(cmd string, args []string) (err error) {
 		return errors.Trace(cmdProxy(argv))
 	case "slot":
 		return errors.Trace(cmdSlot(argv))
+	case "codis-ha":
+		return errors.Trace(cmdCodisHA(argv))
 	}
 	return errors.Errorf("%s is not a valid command. See 'codis-config -h'", cmd)
 }
