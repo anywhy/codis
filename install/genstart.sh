@@ -9,6 +9,7 @@ rm -rf ../logs/*
 ./initslot.sh PID=\$!;wait \$PID;
 ./start_redis.sh PID=\$!;wait \$PID;
 ./start_proxy.sh PID=\$!;wait \$PID;
+./start_ha.sh PID=\$!;wait \$PID;
 EOF
 else
 cat << EOF > ./tem/startall.sh
