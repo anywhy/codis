@@ -19,7 +19,7 @@ for item in nodes:
     group_id = item['group_id']
     for node in item['nodes']:
 	print ("add redis node:" + node['host'] + " to group:" + str(group_id) )
-        removeCmd = '../bin/codis-config -c ../etc/config.ini server remove-group ' + str(group_id)
-        os.system(removeCmd)
+        #removeCmd = '../bin/codis-config -c ../etc/config.ini server remove-group ' + str(group_id)
+        #os.system(removeCmd)
         addCmd = '../bin/codis-config -c ../etc/config.ini server add ' + str(group_id) + ' ' + node['host'] + ' ' + node['type']
         os.system(addCmd)
