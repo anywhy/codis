@@ -4,13 +4,13 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"strconv"
 
 	"github.com/CodisLabs/codis/pkg/models"
-	"github.com/CodisLabs/codis/pkg/proxy"
 	"github.com/CodisLabs/codis/pkg/topom"
 	"github.com/CodisLabs/codis/pkg/utils"
 	"github.com/CodisLabs/codis/pkg/utils/log"
@@ -24,8 +24,10 @@ func (t *cmdDashboard) Main(d map[string]interface{}) {
 	t.addr = utils.ArgumentMust(d, "--dashboard")
 
 	switch {
+
 	default:
 		t.handleOverview(d)
+
 	case d["--shutdown"].(bool):
 		t.handleShutdown(d)
 	case d["--log-level"] != nil:
@@ -65,6 +67,9 @@ func (t *cmdDashboard) Main(d map[string]interface{}) {
 
 	case d["--slot-action"].(bool):
 		t.handleSlotActionCommand(d)
+
+	case d["--rebalance"].(bool):
+		t.handleSlotRebalance(d)
 
 	}
 }
@@ -224,18 +229,18 @@ func (t *cmdDashboard) handleSlotsCommand(d map[string]interface{}) {
 	}
 }
 
-func (t *cmdDashboard) parseProxyToken(d map[string]interface{}) string {
+func (t *cmdDashboard) parseProxyTokens(d map[string]interface{}) []string {
 	switch {
 
 	default:
 
-		log.Panicf("cann't find specific proxy")
+		log.Panicf("can't find specific proxy")
 
-		return ""
+		return nil
 
 	case d["--token"] != nil:
 
-		return utils.ArgumentMust(d, "--token")
+		return []string{utils.ArgumentMust(d, "--token")}
 
 	case d["--pid"] != nil:
 
@@ -246,34 +251,56 @@ func (t *cmdDashboard) parseProxyToken(d map[string]interface{}) string {
 		log.Debugf("call rpc stats to dashboard %s", t.addr)
 		s, err := c.Stats()
 		if err != nil {
-			log.Debugf("call rpc stats to dashboard %s failed", t.addr)
+			log.PanicErrorf(err, "call rpc stats to dashboard %s failed", t.addr)
 		}
 		log.Debugf("call rpc stats OK")
 
+		var tokens []string
+
 		for _, p := range s.Proxy.Models {
 			if p.Id == pid {
-				return p.Token
+				tokens = append(tokens, p.Token)
 			}
 		}
 
-		log.Panicf("cann't find specific proxy with id = %d", pid)
+		if len(tokens) != 0 {
+			return tokens
+		}
 
-		return ""
+		if !d["--force"].(bool) {
+			log.Panicf("can't find specific proxy with id = %d", pid)
+		}
+		return nil
 
 	case d["--addr"] != nil:
 
 		addr := utils.ArgumentMust(d, "--addr")
 
-		c := proxy.NewApiClient(addr)
+		c := t.newTopomClient()
 
-		log.Debugf("call rpc model to proxy %s", t.addr)
-		p, err := c.Model()
+		log.Debugf("call rpc stats to dashboard %s", t.addr)
+		s, err := c.Stats()
 		if err != nil {
-			log.PanicErrorf(err, "call rpc model to proxy %s failed", t.addr)
+			log.PanicErrorf(err, "call rpc stats to dashboard %s failed", t.addr)
 		}
-		log.Debugf("call rpc model OK")
+		log.Debugf("call rpc stats OK")
 
-		return p.Token
+		var tokens []string
+
+		for _, p := range s.Proxy.Models {
+			if p.AdminAddr == addr {
+				tokens = append(tokens, p.Token)
+			}
+		}
+
+		if len(tokens) != 0 {
+			return tokens
+		}
+
+		if !d["--force"].(bool) {
+			log.Panicf("can't find specific proxy with addr = %s", addr)
+		}
+		return nil
 
 	}
 }
@@ -295,14 +322,15 @@ func (t *cmdDashboard) handleProxyCommand(d map[string]interface{}) {
 
 	case d["--remove-proxy"].(bool):
 
-		token := t.parseProxyToken(d)
 		force := d["--force"].(bool)
 
-		log.Debugf("call rpc remove-proxy to dashboard %s", t.addr)
-		if err := c.RemoveProxy(token, force); err != nil {
-			log.PanicErrorf(err, "call rpc remove-proxy to dashboard %s failed", t.addr)
+		for _, token := range t.parseProxyTokens(d) {
+			log.Debugf("call rpc remove-proxy to dashboard %s", t.addr)
+			if err := c.RemoveProxy(token, force); err != nil {
+				log.PanicErrorf(err, "call rpc remove-proxy to dashboard %s failed", t.addr)
+			}
+			log.Debugf("call rpc remove-proxy OK")
 		}
-		log.Debugf("call rpc remove-proxy OK")
 
 	case d["--reinit-proxy"].(bool):
 
@@ -310,13 +338,13 @@ func (t *cmdDashboard) handleProxyCommand(d map[string]interface{}) {
 
 		default:
 
-			token := t.parseProxyToken(d)
-
-			log.Debugf("call rpc reinit-proxy to dashboard %s", t.addr)
-			if err := c.ReinitProxy(token); err != nil {
-				log.PanicErrorf(err, "call rpc reinit-proxy to dashboard %s failed", t.addr)
+			for _, token := range t.parseProxyTokens(d) {
+				log.Debugf("call rpc reinit-proxy to dashboard %s", t.addr)
+				if err := c.ReinitProxy(token); err != nil {
+					log.PanicErrorf(err, "call rpc reinit-proxy to dashboard %s failed", t.addr)
+				}
+				log.Debugf("call rpc reinit-proxy OK")
 			}
-			log.Debugf("call rpc reinit-proxy OK")
 
 		case d["--all"].(bool):
 
@@ -596,6 +624,128 @@ func (t *cmdDashboard) handleSlotActionCommand(d map[string]interface{}) {
 			log.PanicErrorf(err, "call rpc slot-action-disabled to dashboard %s failed", t.addr)
 		}
 		log.Debugf("call rpc slot-action-disabled OK")
+
+	}
+}
+
+func (t *cmdDashboard) handleSlotRebalance(d map[string]interface{}) {
+	c := t.newTopomClient()
+
+	log.Debugf("call rpc stats to dashboard %s", t.addr)
+	s, err := c.Stats()
+	if err != nil {
+		log.PanicErrorf(err, "call rpc stats to dashboard %s failed", t.addr)
+	}
+	log.Debugf("call rpc stats OK")
+
+	if s.Slots == nil {
+		log.Panicf("slots is nil")
+	}
+	if s.Group.Models == nil {
+		log.Panicf("group is nil")
+	}
+
+	var count = make(map[int]int)
+	for _, g := range s.Group.Models {
+		if len(g.Servers) != 0 {
+			count[g.Id] = 0
+		}
+	}
+	if len(count) == 0 {
+		log.Panicf("no valid group could be found")
+	}
+
+	var bound = (len(s.Slots) + len(count) - 1) / len(count)
+	var pending []int
+	for _, s := range s.Slots {
+		if s.Action.State != models.ActionNothing {
+			count[s.Action.TargetId]++
+		}
+	}
+	for _, s := range s.Slots {
+		if s.Action.State != models.ActionNothing {
+			continue
+		}
+		if gid := s.GroupId; gid != 0 && count[gid] < bound {
+			count[gid]++
+		} else {
+			pending = append(pending, s.Id)
+		}
+	}
+
+	var plans = make(map[int][][]int)
+	for _, g := range s.Group.Models {
+		if len(g.Servers) == 0 {
+			continue
+		}
+		var batch [][]int
+		var slot int
+		var beg, end = 0, -1
+		for len(pending) != 0 && count[g.Id] < bound {
+			slot, pending = pending[0], pending[1:]
+			count[g.Id]++
+			if beg > end {
+				beg = slot
+			} else if slot != end+1 {
+				batch = append(batch, []int{beg, end})
+				beg = slot
+			}
+			end = slot
+		}
+		if beg <= end {
+			batch = append(batch, []int{beg, end})
+		}
+		if len(batch) != 0 {
+			plans[g.Id] = batch
+		}
+	}
+
+	switch {
+
+	case d["--confirm"].(bool):
+
+		if len(plans) == 0 {
+			fmt.Println("nothing changes")
+		} else {
+			for gid, batch := range plans {
+				for _, rng := range batch {
+					fmt.Printf("migrate slot-[%4d,%4d] to group-%d\n", rng[0], rng[1], gid)
+					log.Debugf("call rpc create-slot-action-range to dashboard %s", t.addr)
+					if err := c.SlotCreateActionRange(rng[0], rng[1], gid); err != nil {
+						log.PanicErrorf(err, "call rpc create-slot-action-range to dashboard %s failed", t.addr)
+					}
+					log.Debugf("call rpc create-slot-action-range OK")
+				}
+			}
+			fmt.Println("done")
+		}
+
+	default:
+
+		if len(plans) == 0 {
+			fmt.Println("# nothing changes")
+		} else {
+			fmt.Printf("CODIS_ADMIN=codis-admin\n")
+			fmt.Printf("CODIS_DASHBOARD=%s\n", t.addr)
+			fmt.Printf("FLAGS=\n")
+			var cmds = make(map[int][]string)
+			for gid, batch := range plans {
+				for _, rng := range batch {
+					var b bytes.Buffer
+					fmt.Fprintf(&b, "${CODIS_ADMIN} ${FLAGS} --dashboard=${CODIS_DASHBOARD} ")
+					fmt.Fprintf(&b, "--slot-action --create-range --beg=%-4d --end=%-4d --gid=%d", rng[0], rng[1], gid)
+					cmds[gid] = append(cmds[gid], b.String())
+				}
+			}
+			for _, g := range s.Group.Models {
+				if cmds[g.Id] == nil {
+					continue
+				}
+				for _, cmd := range cmds[g.Id] {
+					fmt.Println(cmd)
+				}
+			}
+		}
 
 	}
 }
