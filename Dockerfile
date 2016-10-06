@@ -1,9 +1,6 @@
-FROM golang:1.6
+FROM golang:1.6.3
 
 RUN apt-get update
-RUN apt-get install -y vim bash golang
-RUN apt-get clean
-RUN rm -rf /var/lib/apt/lists/*
 
 ENV GOPATH /gopath
 ENV CODIS  ${GOPATH}/src/github.com/CodisLabs/codis
