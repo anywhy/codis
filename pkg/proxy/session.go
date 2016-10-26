@@ -42,8 +42,6 @@ type Session struct {
 
 	broken     atomic2.Bool
 	authorized bool
-
-	alloc RequestAlloc
 }
 
 func (s *Session) String() string {
@@ -81,7 +79,14 @@ func NewSessionConn(sock net.Conn, config *Config) *Session {
 	return NewSession(c, config.ProductAuth)
 }
 
-func (s *Session) CloseWithError(err error, half bool) {
+func (s *Session) CloseReader() error {
+	s.exit.Do(func() {
+		log.Infof("session [%p] closed: %s, quit", s, s)
+	})
+	return s.Conn.CloseReader()
+}
+
+func (s *Session) CloseWithError(err error) error {
 	s.exit.Do(func() {
 		if err != nil {
 			log.Infof("session [%p] closed: %s, error: %s", s, s, err)
@@ -89,12 +94,8 @@ func (s *Session) CloseWithError(err error, half bool) {
 			log.Infof("session [%p] closed: %s, quit", s, s)
 		}
 	})
-	if half {
-		s.Conn.CloseReader()
-	} else {
-		s.Conn.Close()
-		s.broken.Set(true)
-	}
+	s.broken.Set(true)
+	return s.Conn.Close()
 }
 
 var (
@@ -109,7 +110,7 @@ func (s *Session) Start(d *Router, config *Config) {
 		if int(incrSessions()) > config.ProxyMaxClients {
 			go func() {
 				s.Conn.Encode(redis.NewErrorf("ERR max number of clients reached"), true)
-				s.CloseWithError(ErrTooManySessions, false)
+				s.CloseWithError(ErrTooManySessions)
 			}()
 			decrSessions()
 			return
@@ -118,24 +119,21 @@ func (s *Session) Start(d *Router, config *Config) {
 		if !d.isOnline() {
 			go func() {
 				s.Conn.Encode(redis.NewErrorf("ERR router is not online"), true)
-				s.CloseWithError(ErrRouterNotOnline, false)
+				s.CloseWithError(ErrRouterNotOnline)
 			}()
 			decrSessions()
 			return
 		}
 
 		tasks := make(chan *Request, config.SessionMaxPipeline)
-		var ch = make(chan struct{})
 
 		go func() {
-			defer close(ch)
 			s.loopWriter(tasks)
+			decrSessions()
 		}()
 
 		go func() {
 			s.loopReader(tasks, d)
-			<-ch
-			decrSessions()
 		}()
 	})
 }
@@ -143,7 +141,9 @@ func (s *Session) Start(d *Router, config *Config) {
 func (s *Session) loopReader(tasks chan<- *Request, d *Router) (err error) {
 	defer func() {
 		if err != nil {
-			s.CloseWithError(err, true)
+			s.CloseWithError(err)
+		} else {
+			s.CloseReader()
 		}
 		close(tasks)
 	}()
@@ -158,10 +158,10 @@ func (s *Session) loopReader(tasks chan<- *Request, d *Router) (err error) {
 		s.LastOpUnix = start.Unix()
 		s.Ops++
 
-		r := s.alloc.NewRequest()
+		r := &Request{}
 		r.Multi = multi
 		r.Start = start.UnixNano()
-		r.Batch = s.alloc.NewBatch()
+		r.Batch = &sync.WaitGroup{}
 		if err := s.handleRequest(r, d); err != nil {
 			r.Resp = redis.NewErrorf("ERR handle request, %s", err)
 			tasks <- r
@@ -175,7 +175,7 @@ func (s *Session) loopReader(tasks chan<- *Request, d *Router) (err error) {
 
 func (s *Session) loopWriter(tasks <-chan *Request) (err error) {
 	defer func() {
-		s.CloseWithError(err, false)
+		s.CloseWithError(err)
 		for _ = range tasks {
 			s.incrOpFails(nil)
 		}
@@ -195,8 +195,6 @@ func (s *Session) loopWriter(tasks <-chan *Request) (err error) {
 		}
 		if err := p.Encode(resp); err != nil {
 			return s.incrOpFails(err)
-		} else {
-			r.Release()
 		}
 		if err := p.Flush(len(tasks) == 0); err != nil {
 			return s.incrOpFails(err)
@@ -366,24 +364,23 @@ func (s *Session) handleRequestMGet(r *Request, d *Router) error {
 	case nkeys == 1:
 		return d.dispatch(r)
 	}
-	var sub = make([]*Request, nkeys)
+	var sub = r.MakeSubRequest(nkeys)
 	for i := range sub {
-		sub[i] = s.alloc.SubRequest(r)
 		sub[i].Multi = []*redis.Resp{
 			r.Multi[0],
 			r.Multi[i+1],
 		}
-		if err := d.dispatch(sub[i]); err != nil {
+		if err := d.dispatch(&sub[i]); err != nil {
 			return err
 		}
 	}
 	r.Coalesce = func() error {
 		var array = make([]*redis.Resp, len(sub))
-		for i, x := range sub {
-			if err := x.Err; err != nil {
+		for i := range sub {
+			if err := sub[i].Err; err != nil {
 				return err
 			}
-			switch resp := x.Resp; {
+			switch resp := sub[i].Resp; {
 			case resp == nil:
 				return ErrRespIsRequired
 			case resp.IsArray() && len(resp.Array) == 1:
@@ -407,24 +404,23 @@ func (s *Session) handleRequestMSet(r *Request, d *Router) error {
 	case nblks == 2:
 		return d.dispatch(r)
 	}
-	var sub = make([]*Request, nblks/2)
+	var sub = r.MakeSubRequest(nblks / 2)
 	for i := range sub {
-		sub[i] = s.alloc.SubRequest(r)
 		sub[i].Multi = []*redis.Resp{
 			r.Multi[0],
 			r.Multi[i*2+1],
 			r.Multi[i*2+2],
 		}
-		if err := d.dispatch(sub[i]); err != nil {
+		if err := d.dispatch(&sub[i]); err != nil {
 			return err
 		}
 	}
 	r.Coalesce = func() error {
-		for _, x := range sub {
-			if err := x.Err; err != nil {
+		for i := range sub {
+			if err := sub[i].Err; err != nil {
 				return err
 			}
-			switch resp := x.Resp; {
+			switch resp := sub[i].Resp; {
 			case resp == nil:
 				return ErrRespIsRequired
 			case resp.IsString():
@@ -447,24 +443,23 @@ func (s *Session) handleRequestMDel(r *Request, d *Router) error {
 	case nkeys == 1:
 		return d.dispatch(r)
 	}
-	var sub = make([]*Request, nkeys)
+	var sub = r.MakeSubRequest(nkeys)
 	for i := range sub {
-		sub[i] = s.alloc.SubRequest(r)
 		sub[i].Multi = []*redis.Resp{
 			r.Multi[0],
 			r.Multi[i+1],
 		}
-		if err := d.dispatch(sub[i]); err != nil {
+		if err := d.dispatch(&sub[i]); err != nil {
 			return err
 		}
 	}
 	r.Coalesce = func() error {
 		var n int
-		for _, x := range sub {
-			if err := x.Err; err != nil {
+		for i := range sub {
+			if err := sub[i].Err; err != nil {
 				return err
 			}
-			switch resp := x.Resp; {
+			switch resp := sub[i].Resp; {
 			case resp == nil:
 				return ErrRespIsRequired
 			case resp.IsInt() && len(resp.Value) == 1:
