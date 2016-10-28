@@ -189,38 +189,33 @@ func (s *Topom) GroupPromoteServer(gid int, addr string) error {
 	}
 
 	if g.Promoting.State != models.ActionNothing {
-		return errors.Errorf("group-[%d] is promoting", g.Id)
-	}
-
-	if index == 0 {
-		return errors.Errorf("group-[%d] can't promote master", g.Id)
+		if index != g.Promoting.Index {
+			return errors.Errorf("group-[%d] is promoting index = %d", g.Id, index)
+		}
+	} else {
+		if index == 0 {
+			return errors.Errorf("group-[%d] can't promote master", g.Id)
+		}
 	}
 	if n := s.action.executor.Get(); n != 0 {
 		return errors.Errorf("slots-migration is running = %d", n)
 	}
-	defer s.dirtyGroupCache(g.Id)
-
-	g.Promoting.Index = index
-	g.Promoting.State = models.ActionPreparing
-	return s.storeUpdateGroup(g)
-}
-
-func (s *Topom) GroupPromoteCommit(gid int) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	ctx, err := s.newContext()
-	if err != nil {
-		return err
-	}
-
-	g, err := ctx.getGroup(gid)
-	if err != nil {
-		return err
-	}
-
-	log.Warnf("group-[%d] action promote-commit:\n%s", g.Id, g.Encode())
 
 	switch g.Promoting.State {
+
+	case models.ActionNothing:
+
+		defer s.dirtyGroupCache(g.Id)
+
+		log.Warnf("group-[%d] will promote index = %s", index)
+
+		g.Promoting.Index = index
+		g.Promoting.State = models.ActionPreparing
+		if err := s.storeUpdateGroup(g); err != nil {
+			return err
+		}
+
+		fallthrough
 
 	case models.ActionPreparing:
 
@@ -245,6 +240,19 @@ func (s *Topom) GroupPromoteCommit(gid int) error {
 		fallthrough
 
 	case models.ActionPrepared:
+
+		if p := ctx.sentinel; len(p.Servers) != 0 {
+			defer s.dirtySentinelCache()
+			p.OutOfSync = true
+			if err := s.storeUpdateSentinel(p); err != nil {
+				return err
+			}
+			groupIds := map[int]bool{g.Id: true}
+			sentinel := redis.NewSentinelAuth(s.config.ProductName, s.config.ProductAuth)
+			if err := sentinel.Unmonitor(groupIds, time.Second*5, p.Servers...); err != nil {
+				log.WarnErrorf(err, "group-[%d] unmonitor sentinels failed", g.Id)
+			}
+		}
 
 		defer s.dirtyGroupCache(g.Id)
 
@@ -286,14 +294,6 @@ func (s *Topom) GroupPromoteCommit(gid int) error {
 	case models.ActionFinished:
 
 		log.Warnf("group-[%d] resync to finished", g.Id)
-
-		if p := ctx.sentinel; len(p.Servers) != 0 {
-			defer s.dirtySentinelCache()
-			p.OutOfSync = true
-			if err := s.storeUpdateSentinel(p); err != nil {
-				return err
-			}
-		}
 
 		slots := ctx.getSlotMappingsByGroupId(g.Id)
 
