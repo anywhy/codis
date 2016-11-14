@@ -5,27 +5,27 @@
 ##################################################
 
 # Set Codis Product Name/Auth.
-product_name = "demo-alpha"
+product_name = "demo-beta"
 product_auth = ""
 
 # Set bind address for admin(rpc), tcp only.
-admin_addr = "127.0.0.1:11082"
+admin_addr = "10.4.10.200:11082"
 
 # Set bind address for proxy, proto_type can be "tcp", "tcp4", "tcp6", "unix" or "unixpacket".
 proto_type = "tcp4"
-proxy_addr = "127.0.0.1:19002"
+proxy_addr = "10.4.10.200:19002"
 
 # Set jodis address & session timeout, only accept "zookeeper" & "etcd".
-jodis_name = ""
-jodis_addr = ""
+jodis_name = "zookeeper"
+jodis_addr = "10.4.10.101:2181,10.4.10.102:2181,10.4.10.103:2181,10.4.10.104:2181,10.4.10.105:2181"
 jodis_timeout = "20s"
 jodis_compatible = false
 
 # Set datacenter of proxy.
-proxy_datacenter = ""
+proxy_datacenter = "dc1"
 
 # Set max number of alive sessions.
-proxy_max_clients = 10000
+proxy_max_clients = 2000
 
 # Set max offheap memory size. (0 to disable)
 proxy_max_offheap_size = "1024mb"
@@ -68,7 +68,7 @@ session_send_timeout = "30s"
 
 # Make sure this is higher than the max number of requests for each pipeline request, or your client may be blocked.
 # Set session pipeline buffer size.
-session_max_pipeline = 1024
+session_max_pipeline = 512
 
 # Set session tcp keepalive period. (0 to disable)
 session_keepalive_period = "75s"
