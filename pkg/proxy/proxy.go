@@ -4,10 +4,12 @@
 package proxy
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -143,7 +145,12 @@ func (s *Proxy) setup(config *Config) error {
 		if err != nil {
 			return err
 		}
-		s.xjodis = NewJodis(c, s.model, config.JodisCompatible)
+		if config.JodisCompatible {
+			s.model.JodisPath = filepath.Join("/zk/codis", fmt.Sprintf("db_%s", config.ProductName), "proxy", s.model.Token)
+		} else {
+			s.model.JodisPath = models.JodisPath(config.ProductName, s.model.Token)
+		}
+		s.xjodis = NewJodis(c, s.model)
 	}
 
 	return nil
@@ -470,34 +477,36 @@ type Stats struct {
 		CPU float64 `json:"cpu"`
 	} `json:"rusage"`
 
-	Runtime struct {
-		General struct {
-			Alloc   uint64 `json:"alloc"`
-			Sys     uint64 `json:"sys"`
-			Lookups uint64 `json:"lookups"`
-			Mallocs uint64 `json:"mallocs"`
-			Frees   uint64 `json:"frees"`
-		} `json:"general"`
+	Runtime *RuntimeStats `json:"runtime,omitempty"`
+}
 
-		Heap struct {
-			Alloc   uint64 `json:"alloc"`
-			Sys     uint64 `json:"sys"`
-			Idle    uint64 `json:"idle"`
-			Inuse   uint64 `json:"inuse"`
-			Objects uint64 `json:"objects"`
-		} `json:"heap"`
+type RuntimeStats struct {
+	General struct {
+		Alloc   uint64 `json:"alloc"`
+		Sys     uint64 `json:"sys"`
+		Lookups uint64 `json:"lookups"`
+		Mallocs uint64 `json:"mallocs"`
+		Frees   uint64 `json:"frees"`
+	} `json:"general"`
 
-		GC struct {
-			Num          uint32  `json:"num"`
-			CPUFraction  float64 `json:"cpu_fraction"`
-			TotalPauseMs uint64  `json:"total_pausems"`
-		} `json:"gc"`
+	Heap struct {
+		Alloc   uint64 `json:"alloc"`
+		Sys     uint64 `json:"sys"`
+		Idle    uint64 `json:"idle"`
+		Inuse   uint64 `json:"inuse"`
+		Objects uint64 `json:"objects"`
+	} `json:"heap"`
 
-		NumProcs      int   `json:"num_procs"`
-		NumGoroutines int   `json:"num_goroutines"`
-		NumCgoCall    int64 `json:"num_cgo_call"`
-		MemOffheap    int   `json:"mem_offheap"`
-	} `json:"runtime"`
+	GC struct {
+		Num          uint32  `json:"num"`
+		CPUFraction  float64 `json:"cpu_fraction"`
+		TotalPauseMs uint64  `json:"total_pausems"`
+	} `json:"gc"`
+
+	NumProcs      int   `json:"num_procs"`
+	NumGoroutines int   `json:"num_goroutines"`
+	NumCgoCall    int64 `json:"num_cgo_call"`
+	MemOffheap    int   `json:"mem_offheap"`
 }
 
 type StatsFlags uint32
@@ -556,6 +565,7 @@ func (s *Proxy) Stats(flags StatsFlags) *Stats {
 		var r runtime.MemStats
 		runtime.ReadMemStats(&r)
 
+		stats.Runtime = &RuntimeStats{}
 		stats.Runtime.General.Alloc = r.Alloc
 		stats.Runtime.General.Sys = r.Sys
 		stats.Runtime.General.Lookups = r.Lookups
