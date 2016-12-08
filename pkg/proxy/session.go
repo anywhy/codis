@@ -77,9 +77,13 @@ func NewSession(sock net.Conn, config *Config) *Session {
 	return s
 }
 
-func (s *Session) CloseReader() error {
+func (s *Session) CloseReaderWithError(err error) error {
 	s.exit.Do(func() {
-		log.Infof("session [%p] closed: %s, quit", s, s)
+		if err != nil {
+			log.Infof("session [%p] closed: %s, error: %s", s, s, err)
+		} else {
+			log.Infof("session [%p] closed: %s, quit", s, s)
+		}
 	})
 	return s.Conn.CloseReader()
 }
@@ -132,19 +136,17 @@ func (s *Session) Start(d *Router) {
 
 		go func() {
 			s.loopReader(tasks, d)
+			close(tasks)
 		}()
 	})
 }
 
 func (s *Session) loopReader(tasks chan<- *Request, d *Router) (err error) {
 	defer func() {
-		if err != nil {
-			s.CloseWithError(err)
-		} else {
-			s.CloseReader()
-		}
-		close(tasks)
+		s.CloseReaderWithError(err)
 	}()
+
+	var sensitive = s.config.SessionBreakOnFailure
 
 	for !s.quit {
 		multi, err := s.Conn.DecodeMultiBulk()
@@ -164,7 +166,9 @@ func (s *Session) loopReader(tasks chan<- *Request, d *Router) (err error) {
 		if err := s.handleRequest(r, d); err != nil {
 			r.Resp = redis.NewErrorf("ERR handle request, %s", err)
 			tasks <- r
-			return s.incrOpFails(err)
+			if sensitive {
+				return err
+			}
 		} else {
 			tasks <- r
 		}
@@ -175,11 +179,13 @@ func (s *Session) loopReader(tasks chan<- *Request, d *Router) (err error) {
 func (s *Session) loopWriter(tasks <-chan *Request) (err error) {
 	defer func() {
 		s.CloseWithError(err)
-		for _ = range tasks {
-			s.incrOpFails(nil)
+		for r := range tasks {
+			s.incrOpFails(r, nil)
 		}
 		s.flushOpStats(true)
 	}()
+
+	var sensitive = s.config.SessionBreakOnFailure
 
 	p := s.Conn.FlushEncoder()
 	p.MaxInterval = time.Millisecond
@@ -189,14 +195,18 @@ func (s *Session) loopWriter(tasks <-chan *Request) (err error) {
 		resp, err := s.handleResponse(r)
 		if err != nil {
 			resp = redis.NewErrorf("ERR handle response, %s", err)
-			s.Conn.Encode(resp, true)
-			return s.incrOpFails(err)
+			if sensitive {
+				s.Conn.Encode(resp, true)
+				return s.incrOpFails(r, err)
+			}
 		}
 		if err := p.Encode(resp); err != nil {
-			return s.incrOpFails(err)
+			return s.incrOpFails(r, err)
 		}
 		if err := p.Flush(len(tasks) == 0); err != nil {
-			return s.incrOpFails(err)
+			return s.incrOpFails(r, err)
+		} else {
+			s.incrOpStats(r, resp.Type)
 		}
 		if len(tasks) == 0 {
 			s.flushOpStats(false)
@@ -214,14 +224,10 @@ func (s *Session) handleResponse(r *Request) (*redis.Resp, error) {
 	}
 	if err := r.Err; err != nil {
 		return nil, err
-	}
-	switch resp := r.Resp; {
-	case resp == nil:
+	} else if r.Resp == nil {
 		return nil, ErrRespIsRequired
-	default:
-		s.incrOpStats(r)
-		return resp, nil
 	}
+	return r.Resp, nil
 }
 
 func (s *Session) handleRequest(r *Request, d *Router) error {
@@ -564,19 +570,29 @@ func (s *Session) incrOpTotal() {
 	s.stats.total.Incr()
 }
 
-func (s *Session) incrOpFails(err error) error {
-	incrOpFails()
-	return err
+func (s *Session) getOpStats(opstr string) *opStats {
+	e := s.stats.opmap[opstr]
+	if e == nil {
+		e = &opStats{opstr: opstr}
+		s.stats.opmap[opstr] = e
+	}
+	return e
 }
 
-func (s *Session) incrOpStats(r *Request) {
-	e := s.stats.opmap[r.OpStr]
-	if e == nil {
-		e = &opStats{opstr: r.OpStr}
-		s.stats.opmap[r.OpStr] = e
-	}
+func (s *Session) incrOpStats(r *Request, t redis.RespType) {
+	e := s.getOpStats(r.OpStr)
 	e.calls.Incr()
 	e.nsecs.Add(time.Now().UnixNano() - r.Start)
+	switch t {
+	case redis.TypeError:
+		e.redis.errors.Incr()
+	}
+}
+
+func (s *Session) incrOpFails(r *Request, err error) error {
+	e := s.getOpStats(r.OpStr)
+	e.fails.Incr()
+	return err
 }
 
 func (s *Session) flushOpStats(force bool) {
@@ -591,8 +607,8 @@ func (s *Session) flushOpStats(force bool) {
 
 	incrOpTotal(s.stats.total.Swap(0))
 	for _, e := range s.stats.opmap {
-		if n := e.calls.Swap(0); n != 0 {
-			incrOpStats(e.opstr, n, e.nsecs.Swap(0))
+		if e.calls.Get() != 0 || e.fails.Get() != 0 {
+			incrOpStats(e)
 		}
 	}
 	s.stats.flush.n++
