@@ -74,6 +74,7 @@ func newApiServer(t *Topom) http.Handler {
 		r.Get("/xping/:xauth", api.XPing)
 		r.Get("/stats/:xauth", api.Stats)
 		r.Get("/slots/:xauth", api.Slots)
+		r.Put("/reload/:xauth", api.Reload)
 		r.Put("/shutdown/:xauth", api.Shutdown)
 		r.Put("/loglevel/:xauth/:value", api.LogLevel)
 		r.Group("/proxy", func(r martini.Router) {
@@ -106,6 +107,7 @@ func newApiServer(t *Topom) http.Handler {
 				r.Put("/disabled/:xauth/:value", api.SetSlotActionDisabled)
 			})
 			r.Put("/assign/:xauth", binding.Json([]*models.SlotMapping{}), api.SlotsAssignGroup)
+			r.Put("/assign/:xauth/offline", binding.Json([]*models.SlotMapping{}), api.SlotsAssignOffline)
 		})
 		r.Group("/sentinels", func(r martini.Router) {
 			r.Put("/add/:xauth/:addr", api.AddSentinel)
@@ -185,6 +187,17 @@ func (s *apiServer) Slots(params martini.Params) (int, string) {
 		return rpc.ApiResponseError(err)
 	} else {
 		return s.SlotsNoXAuth()
+	}
+}
+
+func (s *apiServer) Reload(params martini.Params) (int, string) {
+	if err := s.verifyXAuth(params); err != nil {
+		return rpc.ApiResponseError(err)
+	}
+	if err := s.topom.Reload(); err != nil {
+		return rpc.ApiResponseError(err)
+	} else {
+		return rpc.ApiResponseJson("OK")
 	}
 }
 
@@ -664,6 +677,16 @@ func (s *apiServer) SlotsAssignGroup(slots []*models.SlotMapping, params martini
 	return rpc.ApiResponseJson("OK")
 }
 
+func (s *apiServer) SlotsAssignOffline(slots []*models.SlotMapping, params martini.Params) (int, string) {
+	if err := s.verifyXAuth(params); err != nil {
+		return rpc.ApiResponseError(err)
+	}
+	if err := s.topom.SlotsAssignOffline(slots); err != nil {
+		return rpc.ApiResponseError(err)
+	}
+	return rpc.ApiResponseJson("OK")
+}
+
 type ApiClient struct {
 	addr  string
 	xauth string
@@ -720,6 +743,11 @@ func (c *ApiClient) Slots() ([]*models.Slot, error) {
 		return nil, err
 	}
 	return slots, nil
+}
+
+func (c *ApiClient) Reload() error {
+	url := c.encodeURL("/api/topom/reload/%s", c.xauth)
+	return rpc.ApiPutJson(url, nil, nil)
 }
 
 func (c *ApiClient) LogLevel(level log.LogLevel) error {
@@ -860,5 +888,10 @@ func (c *ApiClient) SetSlotActionDisabled(disabled bool) error {
 
 func (c *ApiClient) SlotsAssignGroup(slots []*models.SlotMapping) error {
 	url := c.encodeURL("/api/topom/slots/assign/%s", c.xauth)
+	return rpc.ApiPutJson(url, slots, nil)
+}
+
+func (c *ApiClient) SlotsAssignOffline(slots []*models.SlotMapping) error {
+	url := c.encodeURL("/api/topom/slots/assign/%s/offline", c.xauth)
 	return rpc.ApiPutJson(url, slots, nil)
 }

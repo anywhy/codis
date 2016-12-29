@@ -233,8 +233,10 @@ func (s *Sentinel) Masters(groups map[int]bool, timeout time.Duration, sentinels
 		}(sentinels[i])
 	}
 
+	var majority = 1 + len(sentinels)/2
+
 	masters := make(map[int]string)
-	counter := make(map[int]int)
+	tickets := make(map[int]map[string]int)
 
 	for _ = range sentinels {
 		select {
@@ -243,19 +245,16 @@ func (s *Sentinel) Masters(groups map[int]bool, timeout time.Duration, sentinels
 		case m := <-results:
 			if m != nil {
 				for gid, addr := range m {
-					if masters[gid] == addr {
-						counter[gid]++
+					if masters[gid] != "" {
 						continue
 					}
-					switch counter[gid] {
-					case 0:
+					if tickets[gid] == nil {
+						tickets[gid] = make(map[string]int)
+					}
+					tickets[gid][addr] += 1
+
+					if tickets[gid][addr] >= majority {
 						masters[gid] = addr
-						counter[gid]++
-					case 1:
-						delete(masters, gid)
-						fallthrough
-					default:
-						counter[gid]--
 					}
 				}
 			}
@@ -354,17 +353,19 @@ func (s *Sentinel) Monitor(masters map[int]string, config *MonitorConfig, timeou
 		}(sentinels[i])
 	}
 
+	var err error
+
 	for _ = range sentinels {
 		select {
 		case <-s.Context.Done():
-			return nil
-		case err := <-results:
-			if err != nil {
-				return err
+			return err
+		case e := <-results:
+			if e != nil {
+				err = e
 			}
 		}
 	}
-	return nil
+	return err
 }
 
 func (s *Sentinel) unmonitor(ctx context.Context, sentinel string, timeout time.Duration, groups map[int]bool) error {
@@ -419,17 +420,19 @@ func (s *Sentinel) Unmonitor(groups map[int]bool, timeout time.Duration, sentine
 		}(sentinels[i])
 	}
 
+	var err error
+
 	for _ = range sentinels {
 		select {
 		case <-s.Context.Done():
-			return nil
-		case err := <-results:
-			if err != nil {
-				return err
+			return err
+		case e := <-results:
+			if e != nil {
+				err = e
 			}
 		}
 	}
-	return nil
+	return err
 }
 
 func (s *Sentinel) InfoMonitored(sentinel string, timeout time.Duration) (map[string]interface{}, error) {

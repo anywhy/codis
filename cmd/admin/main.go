@@ -21,8 +21,9 @@ Usage:
 	codis-admin [-v] --proxy=ADDR [--auth=AUTH]  --forcegc
 	codis-admin [-v] --dashboard=ADDR           [config|model|stats|slots|group|proxy]
 	codis-admin [-v] --dashboard=ADDR            --shutdown
+	codis-admin [-v] --dashboard=ADDR            --reload
 	codis-admin [-v] --dashboard=ADDR            --log-level=LEVEL
-	codis-admin [-v] --dashboard=ADDR            --slots-assign   --beg=ID --end=ID --gid=ID [--confirm]
+	codis-admin [-v] --dashboard=ADDR            --slots-assign   --beg=ID --end=ID (--gid=ID|--offline) [--confirm]
 	codis-admin [-v] --dashboard=ADDR            --slots-status
 	codis-admin [-v] --dashboard=ADDR            --list-proxy
 	codis-admin [-v] --dashboard=ADDR            --create-proxy   --addr=ADDR
@@ -50,11 +51,11 @@ Usage:
 	codis-admin [-v] --dashboard=ADDR            --sentinel-add   --addr=ADDR
 	codis-admin [-v] --dashboard=ADDR            --sentinel-del   --addr=ADDR [--force]
 	codis-admin [-v] --dashboard=ADDR            --sentinel-resync
-	codis-admin [-v] --remove-lock               --product=NAME (--zookeeper=ADDR|--etcd=ADDR)
-	codis-admin [-v] --config-dump               --product=NAME (--zookeeper=ADDR|--etcd=ADDR) [-1]
+	codis-admin [-v] --remove-lock               --product=NAME (--zookeeper=ADDR|--etcd=ADDR|--filesystem=ROOT)
+	codis-admin [-v] --config-dump               --product=NAME (--zookeeper=ADDR|--etcd=ADDR|--filesystem=ROOT) [-1]
 	codis-admin [-v] --config-convert=FILE
-	codis-admin [-v] --config-restore=FILE       --product=NAME (--zookeeper=ADDR|--etcd=ADDR) [--confirm]
-	codis-admin [-v] --dashboard-list                           (--zookeeper=ADDR|--etcd=ADDR)
+	codis-admin [-v] --config-restore=FILE       --product=NAME (--zookeeper=ADDR|--etcd=ADDR|--filesystem=ROOT) [--confirm]
+	codis-admin [-v] --dashboard-list                           (--zookeeper=ADDR|--etcd=ADDR|--filesystem=ROOT)
 
 Options:
 	-a AUTH, --auth=AUTH

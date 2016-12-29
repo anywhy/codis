@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/CodisLabs/codis/pkg/models/etcd"
+	"github.com/CodisLabs/codis/pkg/models/fs"
 	"github.com/CodisLabs/codis/pkg/models/zk"
 	"github.com/CodisLabs/codis/pkg/utils/errors"
 )
@@ -27,14 +28,14 @@ type Client interface {
 	CreateEphemeralInOrder(path string, data []byte) (<-chan struct{}, string, error)
 }
 
-var ErrUnknownCoordinator = errors.New("unknown coordinator")
-
 func NewClient(coordinator string, addrlist string, timeout time.Duration) (Client, error) {
 	switch coordinator {
 	case "zk", "zookeeper":
 		return zkclient.New(addrlist, timeout)
 	case "etcd":
 		return etcdclient.New(addrlist, timeout)
+	case "fs", "filesystem":
+		return fsclient.New(addrlist)
 	}
-	return nil, errors.Trace(ErrUnknownCoordinator)
+	return nil, errors.Errorf("invalid coordinator name = %s", coordinator)
 }
