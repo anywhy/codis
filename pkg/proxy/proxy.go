@@ -82,7 +82,7 @@ func New(config *Config) (*Proxy, error) {
 	} else {
 		s.model.Sys = strings.TrimSpace(string(b))
 	}
-	s.model.Hostname, _ = os.Hostname()
+	s.model.Hostname = utils.Hostname
 
 	if err := s.setup(config); err != nil {
 		s.Close()
@@ -427,14 +427,16 @@ func (s *Proxy) keepAlive(d time.Duration) {
 }
 
 func (s *Proxy) acceptConn(l net.Listener) (net.Conn, error) {
-	var delay int
+	var delay = &DelayExp2{
+		Min: 10, Max: 500,
+		Unit: time.Millisecond,
+	}
 	for {
 		c, err := l.Accept()
 		if err != nil {
-			if ne, ok := err.(net.Error); ok && ne.Temporary() {
+			if e, ok := err.(net.Error); ok && e.Temporary() {
 				log.WarnErrorf(err, "[%p] proxy accept new connection failed", s)
-				delay = math2.MinMaxInt(delay*2, 10, 500)
-				time.Sleep(time.Duration(delay) * time.Millisecond)
+				delay.Sleep()
 				continue
 			}
 		}
