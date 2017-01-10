@@ -78,6 +78,29 @@ func (s *Topom) ResyncGroup(gid int) error {
 	return s.storeUpdateGroup(g)
 }
 
+func (s *Topom) ResyncGroupAll() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ctx, err := s.newContext()
+	if err != nil {
+		return err
+	}
+
+	for _, g := range ctx.group {
+		if err := s.resyncSlotMappingsByGroupId(ctx, g.Id); err != nil {
+			log.Warnf("group-[%d] resync-group failed", g.Id)
+			return err
+		}
+		defer s.dirtyGroupCache(g.Id)
+
+		g.OutOfSync = false
+		if err := s.storeUpdateGroup(g); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (s *Topom) GroupAddServer(gid int, dc, addr string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -190,7 +213,7 @@ func (s *Topom) GroupPromoteServer(gid int, addr string) error {
 
 	if g.Promoting.State != models.ActionNothing {
 		if index != g.Promoting.Index {
-			return errors.Errorf("group-[%d] is promoting index = %d", g.Id, index)
+			return errors.Errorf("group-[%d] is promoting index = %d", g.Id, g.Promoting.Index)
 		}
 	} else {
 		if index == 0 {
@@ -207,7 +230,7 @@ func (s *Topom) GroupPromoteServer(gid int, addr string) error {
 
 		defer s.dirtyGroupCache(g.Id)
 
-		log.Warnf("group-[%d] will promote index = %s", g.Id, index)
+		log.Warnf("group-[%d] will promote index = %d", g.Id, index)
 
 		g.Promoting.Index = index
 		g.Promoting.State = models.ActionPreparing
@@ -251,6 +274,9 @@ func (s *Topom) GroupPromoteServer(gid int, addr string) error {
 			sentinel := redis.NewSentinel(s.config.ProductName, s.config.ProductAuth)
 			if err := sentinel.Unmonitor(groupIds, time.Second*5, p.Servers...); err != nil {
 				log.WarnErrorf(err, "group-[%d] unmonitor sentinels failed", g.Id)
+			}
+			if s.ha.masters != nil {
+				delete(s.ha.masters, gid)
 			}
 		}
 
@@ -316,6 +342,46 @@ func (s *Topom) GroupPromoteServer(gid int, addr string) error {
 	}
 }
 
+func (s *Topom) trySwitchGroupMaster(gid int, master string, cache *redis.InfoCache) error {
+	ctx, err := s.newContext()
+	if err != nil {
+		return err
+	}
+	g, err := ctx.getGroup(gid)
+	if err != nil {
+		return err
+	}
+
+	var index = func() int {
+		for i, x := range g.Servers {
+			if x.Addr == master {
+				return i
+			}
+		}
+		for i, x := range g.Servers {
+			rid1 := cache.GetRunId(master)
+			rid2 := cache.GetRunId(x.Addr)
+			if rid1 != "" && rid1 == rid2 {
+				return i
+			}
+		}
+		return -1
+	}()
+	if index == -1 {
+		return errors.Errorf("group-[%d] doesn't have server %s with runid = '%s'", g.Id, master, cache.GetRunId(master))
+	}
+	if index == 0 {
+		return nil
+	}
+	defer s.dirtyGroupCache(g.Id)
+
+	log.Warnf("group-[%d] will switch master to server[%d] = %s", g.Id, index, g.Servers[index].Addr)
+
+	g.Servers[0], g.Servers[index] = g.Servers[index], g.Servers[0]
+	g.OutOfSync = true
+	return s.storeUpdateGroup(g)
+}
+
 func (s *Topom) EnableReplicaGroups(gid int, addr string, value bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -344,6 +410,40 @@ func (s *Topom) EnableReplicaGroups(gid int, addr string, value bool) error {
 	g.Servers[index].ReplicaGroup = value
 
 	return s.storeUpdateGroup(g)
+}
+
+func (s *Topom) EnableReplicaGroupsAll(value bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ctx, err := s.newContext()
+	if err != nil {
+		return err
+	}
+
+	for _, g := range ctx.group {
+		if g.Promoting.State != models.ActionNothing {
+			return errors.Errorf("group-[%d] is promoting", g.Id)
+		}
+		defer s.dirtyGroupCache(g.Id)
+
+		var dirty bool
+		for _, x := range g.Servers {
+			if x.ReplicaGroup != value {
+				x.ReplicaGroup = value
+				dirty = true
+			}
+		}
+		if !dirty {
+			continue
+		}
+		if len(g.Servers) != 1 && ctx.isGroupInUse(g.Id) {
+			g.OutOfSync = true
+		}
+		if err := s.storeUpdateGroup(g); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Topom) SyncCreateAction(addr string) error {
