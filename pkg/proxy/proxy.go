@@ -68,7 +68,7 @@ func New(config *Config) (*Proxy, error) {
 	s.config = config
 	s.exit.C = make(chan struct{})
 	s.router = NewRouter(config)
-	s.ignore = make([]byte, config.ProxyHeapPlaceholder.Int())
+	s.ignore = make([]byte, config.ProxyHeapPlaceholder.Int64())
 
 	s.model = &models.Proxy{
 		StartTime: time.Now().String(),
@@ -91,7 +91,7 @@ func New(config *Config) (*Proxy, error) {
 
 	log.Warnf("[%p] create new proxy:\n%s", s, s.model.Encode())
 
-	unsafe2.SetMaxOffheapBytes(config.ProxyMaxOffheapBytes.Int())
+	unsafe2.SetMaxOffheapBytes(config.ProxyMaxOffheapBytes.Int64())
 
 	go s.serveAdmin()
 	go s.serveProxy()
@@ -142,7 +142,7 @@ func (s *Proxy) setup(config *Config) error {
 	)
 
 	if config.JodisAddr != "" {
-		c, err := models.NewClient(config.JodisName, config.JodisAddr, config.JodisTimeout.Get())
+		c, err := models.NewClient(config.JodisName, config.JodisAddr, config.JodisTimeout.Duration())
 		if err != nil {
 			return err
 		}
@@ -337,7 +337,7 @@ func (s *Proxy) rewatchSentinels(servers []string) {
 				for !p.IsCanceled() {
 					timeout := time.Minute * 15
 					retryAt := time.Now().Add(time.Second * 10)
-					if !p.Subscribe(timeout, callback, servers...) {
+					if !p.Subscribe(servers, timeout, callback) {
 						delayUntil(retryAt)
 					} else {
 						callback()
@@ -349,7 +349,7 @@ func (s *Proxy) rewatchSentinels(servers []string) {
 					var success int
 					for i := 0; i != 10 && !p.IsCanceled() && success != 2; i++ {
 						timeout := time.Second * 5
-						masters, err := p.Masters(s.router.GetGroupIds(), timeout, servers...)
+						masters, err := p.Masters(servers, timeout)
 						if err != nil {
 							log.WarnErrorf(err, "[%p] fetch group masters failed", s)
 						} else {
@@ -412,8 +412,8 @@ func (s *Proxy) serveProxy() {
 		}
 	}(s.lproxy)
 
-	if d := s.config.BackendPingPeriod; d != 0 {
-		go s.keepAlive(d.Get())
+	if d := s.config.BackendPingPeriod.Duration(); d != 0 {
+		go s.keepAlive(d)
 	}
 	if s.xjodis != nil {
 		s.xjodis.Start()
@@ -532,7 +532,7 @@ type RuntimeStats struct {
 	NumProcs      int   `json:"num_procs"`
 	NumGoroutines int   `json:"num_goroutines"`
 	NumCgoCall    int64 `json:"num_cgo_call"`
-	MemOffheap    int   `json:"mem_offheap"`
+	MemOffheap    int64 `json:"mem_offheap"`
 }
 
 type StatsFlags uint32

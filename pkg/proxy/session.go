@@ -62,12 +62,12 @@ func (s *Session) String() string {
 
 func NewSession(sock net.Conn, config *Config) *Session {
 	c := redis.NewConn(sock,
-		config.SessionRecvBufsize.Int(),
-		config.SessionSendBufsize.Int(),
+		config.SessionRecvBufsize.AsInt(),
+		config.SessionSendBufsize.AsInt(),
 	)
-	c.ReaderTimeout = config.SessionRecvTimeout.Get()
-	c.WriterTimeout = config.SessionSendTimeout.Get()
-	c.SetKeepAlivePeriod(config.SessionKeepAlivePeriod.Get())
+	c.ReaderTimeout = config.SessionRecvTimeout.Duration()
+	c.WriterTimeout = config.SessionSendTimeout.Duration()
+	c.SetKeepAlivePeriod(config.SessionKeepAlivePeriod.Duration())
 
 	s := &Session{
 		Conn: c, config: config,
@@ -658,7 +658,7 @@ func (s *Session) flushOpStats(force bool) {
 
 	incrOpTotal(s.stats.total.Swap(0))
 	for _, e := range s.stats.opmap {
-		if e.calls.Get() != 0 || e.fails.Get() != 0 {
+		if e.calls.Int64() != 0 || e.fails.Int64() != 0 {
 			incrOpStats(e)
 		}
 	}
